@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Breaking changes within the 0.x line are called out explicitly.
 
+## [Unreleased]
+
+### Added
+
+- Optional Vietnam equity market support through a lazy-loaded `vnstock` data
+  vendor adapter, with Vietnam market profile metadata, VNINDEX benchmark
+  configuration, and CLI/docs examples for local symbols such as `FPT` and
+  `HOSE:FPT`.
+
 ## [0.2.4] — 2026-04-25
 
 ### Added

@@ -14,11 +14,22 @@ config["max_debate_rounds"] = 1  # Increase debate rounds
 
 # Configure data vendors (default uses yfinance, no extra API keys needed)
 config["data_vendors"] = {
-    "core_stock_apis": "yfinance",           # Options: alpha_vantage, yfinance
-    "technical_indicators": "yfinance",      # Options: alpha_vantage, yfinance
-    "fundamental_data": "yfinance",          # Options: alpha_vantage, yfinance
-    "news_data": "yfinance",                 # Options: alpha_vantage, yfinance
+    "core_stock_apis": "yfinance",           # Options: alpha_vantage, yfinance, vnstock
+    "technical_indicators": "yfinance",      # Options: alpha_vantage, yfinance, vnstock
+    "fundamental_data": "yfinance",          # Options: alpha_vantage, yfinance, vnstock
+    "news_data": "yfinance",                 # Options: alpha_vantage, yfinance, vnstock
 }
+
+# Vietnam example after installing the optional provider: pip install ".[vietnam]"
+# config["market_profile"] = "vietnam"
+# config["benchmark_symbol"] = "VNINDEX"
+# config["currency"] = "VND"
+# config["data_vendors"] = {
+#     "core_stock_apis": "vnstock,yfinance",
+#     "technical_indicators": "vnstock,yfinance",
+#     "fundamental_data": "vnstock,yfinance",
+#     "news_data": "vnstock,yfinance",
+# }
 
 # Initialize with custom config
 ta = TradingAgentsGraph(debug=True, config=config)

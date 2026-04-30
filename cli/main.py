@@ -503,7 +503,7 @@ def get_user_selections():
     console.print(
         create_question_box(
             "Step 1: Ticker Symbol",
-            "Enter the exact ticker symbol to analyze, including exchange suffix when needed (examples: SPY, CNC.TO, 7203.T, 0700.HK)",
+            "Enter the exact ticker symbol to analyze, including exchange suffix or market prefix when needed (examples: SPY, CNC.TO, 7203.T, 0700.HK, FPT, HOSE:FPT, VNINDEX)",
             "SPY",
         )
     )
@@ -614,7 +614,7 @@ def get_user_selections():
 
 def get_ticker():
     """Get ticker symbol from user input."""
-    return typer.prompt("", default="SPY")
+    return normalize_ticker_symbol(typer.prompt("", default="SPY"))
 
 
 def get_analysis_date():
@@ -944,6 +944,17 @@ def run_analysis(checkpoint: bool = False):
     config["anthropic_effort"] = selections.get("anthropic_effort")
     config["output_language"] = selections.get("output_language", "English")
     config["checkpoint_enabled"] = checkpoint
+
+    if apply_market_profile_for_ticker(config, selections["ticker"]):
+        if not is_vnstock_available():
+            console.print(
+                "\n[red]Vietnam ticker detected, but the optional vnstock provider is not installed.[/red]"
+            )
+            console.print(
+                "[yellow]Install it with `uv sync --extra vietnam` or `pip install -e \".[vietnam]\"`, then rerun the analysis.[/yellow]"
+            )
+            return
+        console.print("[cyan]Vietnam ticker detected; using vnstock data vendors.[/cyan]")
 
     # Create stats callback handler for tracking LLM/tool calls
     stats_handler = StatsCallbackHandler()

@@ -1,14 +1,20 @@
 import questionary
+from importlib.util import find_spec
 from typing import List, Optional, Tuple, Dict
 
 from rich.console import Console
 
 from cli.models import AnalystType
+from tradingagents.default_config import (
+    apply_market_profile_for_symbol,
+    is_explicit_vietnam_symbol,
+    normalize_ticker_symbol,
+)
 from tradingagents.llm_clients.model_catalog import get_model_options
 
 console = Console()
 
-TICKER_INPUT_EXAMPLES = "Examples: SPY, CNC.TO, 7203.T, 0700.HK"
+TICKER_INPUT_EXAMPLES = "Examples: SPY, CNC.TO, 7203.T, 0700.HK, FPT, HOSE:FPT, VNINDEX"
 
 ANALYST_ORDER = [
     ("Market Analyst", AnalystType.MARKET),
@@ -38,9 +44,14 @@ def get_ticker() -> str:
     return normalize_ticker_symbol(ticker)
 
 
-def normalize_ticker_symbol(ticker: str) -> str:
-    """Normalize ticker input while preserving exchange suffixes."""
-    return ticker.strip().upper()
+def apply_market_profile_for_ticker(config: Dict, ticker: str) -> bool:
+    """Mutate CLI config for explicit Vietnam tickers and report whether it changed."""
+    return apply_market_profile_for_symbol(config, ticker)
+
+
+def is_vnstock_available() -> bool:
+    """Return whether the optional Vietnam data provider is importable."""
+    return find_spec("vnstock") is not None
 
 
 def get_analysis_date() -> str:

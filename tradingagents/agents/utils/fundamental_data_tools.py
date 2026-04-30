@@ -12,7 +12,7 @@ def get_fundamentals(
     Retrieve comprehensive fundamental data for a given ticker symbol.
     Uses the configured fundamental_data vendor.
     Args:
-        ticker (str): Ticker symbol of the company
+        ticker (str): Ticker symbol of the company, e.g. AAPL, TSM, FPT, HOSE:FPT
         curr_date (str): Current date you are trading at, yyyy-mm-dd
     Returns:
         str: A formatted report containing comprehensive fundamental data
@@ -30,7 +30,7 @@ def get_balance_sheet(
     Retrieve balance sheet data for a given ticker symbol.
     Uses the configured fundamental_data vendor.
     Args:
-        ticker (str): Ticker symbol of the company
+        ticker (str): Ticker symbol of the company, e.g. AAPL, TSM, FPT, HOSE:FPT
         freq (str): Reporting frequency: annual/quarterly (default quarterly)
         curr_date (str): Current date you are trading at, yyyy-mm-dd
     Returns:
@@ -49,7 +49,7 @@ def get_cashflow(
     Retrieve cash flow statement data for a given ticker symbol.
     Uses the configured fundamental_data vendor.
     Args:
-        ticker (str): Ticker symbol of the company
+        ticker (str): Ticker symbol of the company, e.g. AAPL, TSM, FPT, HOSE:FPT
         freq (str): Reporting frequency: annual/quarterly (default quarterly)
         curr_date (str): Current date you are trading at, yyyy-mm-dd
     Returns:
@@ -68,7 +68,7 @@ def get_income_statement(
     Retrieve income statement data for a given ticker symbol.
     Uses the configured fundamental_data vendor.
     Args:
-        ticker (str): Ticker symbol of the company
+        ticker (str): Ticker symbol of the company, e.g. AAPL, TSM, FPT, HOSE:FPT
         freq (str): Reporting frequency: annual/quarterly (default quarterly)
         curr_date (str): Current date you are trading at, yyyy-mm-dd
     Returns:

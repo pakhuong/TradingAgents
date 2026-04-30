@@ -9,15 +9,13 @@ def initialize_config():
     """Initialize the configuration with default values."""
     global _config
     if _config is None:
-        _config = default_config.DEFAULT_CONFIG.copy()
+        _config = default_config.resolve_config()
 
 
 def set_config(config: Dict):
     """Update the configuration with custom values."""
     global _config
-    if _config is None:
-        _config = default_config.DEFAULT_CONFIG.copy()
-    _config.update(config)
+    _config = default_config.resolve_config(config)
 
 
 def get_config() -> Dict:
