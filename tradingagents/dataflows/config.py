@@ -11,7 +11,7 @@ def initialize_config():
     """Initialize the configuration with default values."""
     global _config
     if _config is None:
-        _config = deepcopy(default_config.DEFAULT_CONFIG)
+        _config = default_config.resolve_config()
 
 
 def set_config(config: Dict):
@@ -24,11 +24,13 @@ def set_config(config: Dict):
     global _config
     initialize_config()
     incoming = deepcopy(config)
+    merged = deepcopy(_config)
     for key, value in incoming.items():
-        if isinstance(value, dict) and isinstance(_config.get(key), dict):
-            _config[key].update(value)
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key].update(value)
         else:
-            _config[key] = value
+            merged[key] = value
+    _config = default_config.resolve_config(merged)
 
 
 def get_config() -> Dict:

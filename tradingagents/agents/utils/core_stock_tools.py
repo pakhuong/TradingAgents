@@ -13,7 +13,7 @@ def get_stock_data(
     Retrieve stock price data (OHLCV) for a given ticker symbol.
     Uses the configured core_stock_apis vendor.
     Args:
-        symbol (str): Ticker symbol of the company, e.g. AAPL, TSM
+        symbol (str): Ticker symbol of the company, e.g. AAPL, TSM, FPT, HOSE:FPT
         start_date (str): Start date in yyyy-mm-dd format
         end_date (str): End date in yyyy-mm-dd format
     Returns:

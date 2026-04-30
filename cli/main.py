@@ -499,7 +499,7 @@ def get_user_selections():
     console.print(
         create_question_box(
             "Step 1: Ticker Symbol",
-            "Enter the exact ticker symbol to analyze, including exchange suffix when needed (examples: SPY, CNC.TO, 7203.T, 0700.HK)",
+            "Enter the exact ticker symbol to analyze, including exchange suffix or market prefix when needed (examples: SPY, CNC.TO, 7203.T, 0700.HK, FPT, HOSE:FPT, VNINDEX)",
             "SPY",
         )
     )
@@ -637,18 +637,18 @@ def get_ticker():
         validate=lambda value: (
             not value.strip()
             or (
-                all(ch.isalnum() or ch in "._-^" for ch in value.strip())
+                all(ch.isalnum() or ch in "._-^:" for ch in value.strip())
                 and len(value.strip()) <= 32
             )
         )
-        or "Please enter a valid ticker symbol, e.g. AAPL, 000404.SZ, 0700.HK.",
+        or "Please enter a valid ticker symbol, e.g. AAPL, 000404.SZ, 0700.HK, HOSE:FPT.",
     ).ask()
 
     if ticker is None:
         console.print("\n[red]No ticker symbol provided. Exiting...[/red]")
         raise typer.Exit(1)
 
-    return (ticker.strip() or "SPY").upper()
+    return normalize_ticker_symbol(ticker or "SPY")
 
 
 def get_analysis_date():
@@ -978,6 +978,17 @@ def run_analysis(checkpoint: bool = False):
     config["anthropic_effort"] = selections.get("anthropic_effort")
     config["output_language"] = selections.get("output_language", "English")
     config["checkpoint_enabled"] = checkpoint
+
+    if apply_market_profile_for_ticker(config, selections["ticker"]):
+        if not is_vnstock_available():
+            console.print(
+                "\n[red]Vietnam ticker detected, but the optional vnstock provider is not installed.[/red]"
+            )
+            console.print(
+                "[yellow]Install it with `uv sync --extra vietnam` or `pip install -e \".[vietnam]\"`, then rerun the analysis.[/yellow]"
+            )
+            return
+        console.print("[cyan]Vietnam ticker detected; using vnstock data vendors.[/cyan]")
 
     # Create stats callback handler for tracking LLM/tool calls
     stats_handler = StatsCallbackHandler()

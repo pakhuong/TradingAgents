@@ -12,7 +12,7 @@ def get_news(
     Retrieve news data for a given ticker symbol.
     Uses the configured news_data vendor.
     Args:
-        ticker (str): Ticker symbol
+        ticker (str): Ticker symbol, e.g. AAPL, TSM, FPT, HOSE:FPT
         start_date (str): Start date in yyyy-mm-dd format
         end_date (str): End date in yyyy-mm-dd format
     Returns:
@@ -27,11 +27,10 @@ def get_global_news(
     limit: Annotated[Optional[int], "Max articles to return; omit to use the configured default"] = None,
 ) -> str:
     """
-    Retrieve global news data.
+    Retrieve global or market-wide news data.
     Uses the configured news_data vendor. Defaults for look_back_days and
     limit come from DEFAULT_CONFIG (global_news_lookback_days,
     global_news_article_limit); pass explicit values to override.
-
     Args:
         curr_date (str): Current date in yyyy-mm-dd format
         look_back_days (int): Number of days to look back; omit to inherit config
@@ -50,7 +49,7 @@ def get_insider_transactions(
     Retrieve insider transaction information about a company.
     Uses the configured news_data vendor.
     Args:
-        ticker (str): Ticker symbol of the company
+        ticker (str): Ticker symbol of the company, e.g. AAPL, TSM, FPT, HOSE:FPT
     Returns:
         str: A report of insider transaction data
     """
