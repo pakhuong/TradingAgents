@@ -484,55 +484,78 @@ class TestDeferredReflection:
         assert "-5.0%" in human_content
         assert "Exit position immediately." in human_content
 
+    def test_reflect_on_final_decision_uses_configured_benchmark_label(self):
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value.content = "Benchmark-aware reflection."
+        reflector = Reflector(mock_llm, benchmark_label="VNINDEX")
+        reflector.reflect_on_final_decision(
+            final_decision=DECISION_BUY, raw_return=0.04, alpha_return=0.01
+        )
+        messages = mock_llm.invoke.call_args[0][0]
+        human_content = next(content for role, content in messages if role == "human")
+        assert "Alpha vs VNINDEX" in human_content
+
     # TradingAgentsGraph._fetch_returns
 
     def test_fetch_returns_valid_ticker(self):
         stock_prices = [100.0, 102.0, 104.0, 103.0, 105.0, 106.0]
-        spy_prices   = [400.0, 402.0, 404.0, 403.0, 405.0, 406.0]
+        benchmark_prices = [400.0, 402.0, 404.0, 403.0, 405.0, 406.0]
         mock_graph = MagicMock(spec=TradingAgentsGraph)
-        with patch("yfinance.Ticker") as mock_ticker_cls:
-            def _make_ticker(sym):
-                m = MagicMock()
-                m.history.return_value = _price_df(spy_prices if sym == "SPY" else stock_prices)
-                return m
-            mock_ticker_cls.side_effect = _make_ticker
-            raw, alpha, days = TradingAgentsGraph._fetch_returns(mock_graph, "NVDA", "2026-01-05")
+        mock_graph.config = {}
+        mock_graph._fetch_close_prices.side_effect = lambda sym, start, end: pd.Series(
+            benchmark_prices if sym == "SPY" else stock_prices
+        )
+        raw, alpha, days = TradingAgentsGraph._fetch_returns(mock_graph, "NVDA", "2026-01-05")
         assert raw is not None and alpha is not None and days is not None
         assert isinstance(raw, float) and isinstance(alpha, float) and isinstance(days, int)
         assert days == 5
+        mock_graph._fetch_close_prices.assert_any_call("NVDA", "2026-01-05", "2026-01-17")
+        mock_graph._fetch_close_prices.assert_any_call("SPY", "2026-01-05", "2026-01-17")
+
+    def test_fetch_returns_uses_configurable_benchmark(self):
+        stock_prices = [100.0, 110.0, 120.0]
+        benchmark_prices = [1000.0, 1010.0, 1020.0]
+        mock_graph = MagicMock(spec=TradingAgentsGraph)
+        mock_graph.config = {"benchmark_symbol": "VNINDEX"}
+        mock_graph._fetch_close_prices.side_effect = lambda sym, start, end: pd.Series(
+            benchmark_prices if sym == "VNINDEX" else stock_prices
+        )
+
+        raw, alpha, days = TradingAgentsGraph._fetch_returns(
+            mock_graph, "FPT", "2026-01-05", holding_days=2
+        )
+
+        assert days == 2
+        assert raw == pytest.approx(0.20)
+        assert alpha == pytest.approx(0.18)
+        mock_graph._fetch_close_prices.assert_any_call("VNINDEX", "2026-01-05", "2026-01-14")
 
     def test_fetch_returns_too_recent(self):
         """Only 1 data point available → returns (None, None, None), no crash."""
         mock_graph = MagicMock(spec=TradingAgentsGraph)
-        with patch("yfinance.Ticker") as mock_ticker_cls:
-            m = MagicMock()
-            m.history.return_value = _price_df([100.0])
-            mock_ticker_cls.return_value = m
-            raw, alpha, days = TradingAgentsGraph._fetch_returns(mock_graph, "NVDA", "2026-04-19")
+        mock_graph.config = {}
+        mock_graph._fetch_close_prices.return_value = pd.Series([100.0])
+        raw, alpha, days = TradingAgentsGraph._fetch_returns(mock_graph, "NVDA", "2026-04-19")
         assert raw is None and alpha is None and days is None
 
     def test_fetch_returns_delisted(self):
         """Empty DataFrame → returns (None, None, None), no crash."""
         mock_graph = MagicMock(spec=TradingAgentsGraph)
-        with patch("yfinance.Ticker") as mock_ticker_cls:
-            m = MagicMock()
-            m.history.return_value = pd.DataFrame({"Close": []})
-            mock_ticker_cls.return_value = m
-            raw, alpha, days = TradingAgentsGraph._fetch_returns(mock_graph, "XXXXXFAKE", "2026-01-10")
+        mock_graph.config = {}
+        mock_graph._fetch_close_prices.return_value = pd.Series(dtype="float64")
+        raw, alpha, days = TradingAgentsGraph._fetch_returns(mock_graph, "XXXXXFAKE", "2026-01-10")
         assert raw is None and alpha is None and days is None
 
-    def test_fetch_returns_spy_shorter_than_stock(self):
-        """SPY having fewer rows than the stock must not raise IndexError."""
+    def test_fetch_returns_benchmark_shorter_than_stock(self):
+        """Benchmark having fewer rows than the stock must not raise IndexError."""
         stock_prices = [100.0, 102.0, 104.0, 103.0, 105.0, 106.0]
-        spy_prices   = [400.0, 402.0, 403.0]
+        benchmark_prices = [400.0, 402.0, 403.0]
         mock_graph = MagicMock(spec=TradingAgentsGraph)
-        with patch("yfinance.Ticker") as mock_ticker_cls:
-            def _make_ticker(sym):
-                m = MagicMock()
-                m.history.return_value = _price_df(spy_prices if sym == "SPY" else stock_prices)
-                return m
-            mock_ticker_cls.side_effect = _make_ticker
-            raw, alpha, days = TradingAgentsGraph._fetch_returns(mock_graph, "NVDA", "2026-01-05")
+        mock_graph.config = {}
+        mock_graph._fetch_close_prices.side_effect = lambda sym, start, end: pd.Series(
+            benchmark_prices if sym == "SPY" else stock_prices
+        )
+        raw, alpha, days = TradingAgentsGraph._fetch_returns(mock_graph, "NVDA", "2026-01-05")
         assert raw is not None and alpha is not None and days is not None
         assert days == 2
 

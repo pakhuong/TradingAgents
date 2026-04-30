@@ -53,3 +53,7 @@ class VendorNotConfiguredError(VendorError, ValueError):
     Also a ``ValueError`` so existing callers that catch ``ValueError`` keep
     working while the routing layer can treat it as "vendor unavailable".
     """
+
+
+class DataVendorUnavailableError(VendorNotConfiguredError):
+    """Raised when a configured data vendor cannot run in this environment."""

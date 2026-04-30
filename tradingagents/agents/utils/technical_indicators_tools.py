@@ -16,7 +16,7 @@ def get_indicators(
     Retrieve a single technical indicator for a given ticker symbol.
     Uses the configured technical_indicators vendor.
     Args:
-        symbol (str): Ticker symbol of the company, e.g. AAPL, TSM
+        symbol (str): Ticker symbol of the company, e.g. AAPL, TSM, FPT, HOSE:FPT
         indicator (str): A single technical indicator name, e.g. 'rsi', 'macd'. Call this tool once per indicator.
         curr_date (str): The current trading date you are trading on, YYYY-mm-dd
         look_back_days (int): How many days to look back, default is 30

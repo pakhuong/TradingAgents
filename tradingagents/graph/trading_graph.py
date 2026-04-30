@@ -3,11 +3,12 @@
 import json
 import logging
 import os
+from io import StringIO
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import yfinance as yf
+import pandas as pd
 from langgraph.prebuilt import ToolNode
 
 # Import the abstract tool methods from agent_utils
@@ -29,8 +30,13 @@ from tradingagents.agents.utils.agent_utils import (
 )
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.dataflows.config import set_config
+from tradingagents.dataflows.interface import route_to_vendor
 from tradingagents.dataflows.utils import safe_ticker_component
-from tradingagents.default_config import DEFAULT_CONFIG
+from tradingagents.default_config import (
+    DEFAULT_CONFIG,
+    apply_market_profile_for_symbol,
+    resolve_config,
+)
 from tradingagents.llm_clients import create_llm_client
 from tradingagents.reporting import write_report_tree
 
@@ -63,7 +69,7 @@ class TradingAgentsGraph:
             callbacks: Optional list of callback handlers (e.g., for tracking LLM/tool stats)
         """
         self.debug = debug
-        self.config = config or DEFAULT_CONFIG
+        self.config = resolve_config(config)
         self.callbacks = callbacks or []
 
         # Update the interface's config
@@ -116,7 +122,10 @@ class TradingAgentsGraph:
         self.propagator = Propagator(
             max_recur_limit=self.config.get("max_recur_limit", 100),
         )
-        self.reflector = Reflector(self.quick_thinking_llm)
+        self.reflector = Reflector(
+            self.quick_thinking_llm,
+            benchmark_label=self.config.get("benchmark_symbol", "SPY"),
+        )
         self.signal_processor = SignalProcessor(self.quick_thinking_llm)
 
         # State tracking
@@ -128,6 +137,16 @@ class TradingAgentsGraph:
         self.workflow = self.graph_setup.setup_graph(selected_analysts)
         self.graph = self.workflow.compile()
         self._checkpointer_ctx = None
+
+    def _apply_symbol_market_profile(self, ticker: str) -> None:
+        """Apply market-specific data routing once the run ticker is known."""
+        config = self.config.copy()
+        if not apply_market_profile_for_symbol(config, ticker):
+            return
+
+        self.config = resolve_config(config)
+        set_config(self.config)
+        self.reflector.benchmark_label = self.config.get("benchmark_symbol", "SPY")
 
     def _get_provider_kwargs(self) -> dict[str, Any]:
         """Get provider-specific kwargs for LLM client creation."""
@@ -214,6 +233,10 @@ class TradingAgentsGraph:
         explicit = self.config.get("benchmark_ticker")
         if explicit:
             return explicit
+        configured = self.config.get("benchmark_symbol")
+        default_benchmark = DEFAULT_CONFIG.get("benchmark_symbol", "SPY")
+        if configured and configured != default_benchmark:
+            return configured
         benchmark_map = self.config.get("benchmark_map", {})
         ticker_upper = ticker.upper()
         for suffix, benchmark in benchmark_map.items():
@@ -223,48 +246,85 @@ class TradingAgentsGraph:
 
     def _fetch_returns(
         self, ticker: str, trade_date: str, holding_days: int = 5,
-        benchmark: str = "SPY",
+        benchmark: str | None = None,
     ) -> tuple[float | None, float | None, int | None]:
         """Fetch raw and alpha return for ticker over holding_days from trade_date.
 
-        ``benchmark`` is the index used as the alpha baseline (resolved by the
-        caller via ``_resolve_benchmark``). Returns ``(raw_return, alpha_return,
-        actual_holding_days)`` or ``(None, None, None)`` if price data is
-        unavailable (too recent, delisted, or network error).
+        ``benchmark`` is the index used as the alpha baseline. When omitted,
+        the configured market-profile benchmark is used. Returns
+        ``(raw_return, alpha_return, actual_holding_days)`` or
+        ``(None, None, None)`` if price data is unavailable (too recent,
+        delisted, or network error).
         """
-        from tradingagents.dataflows.symbol_utils import normalize_symbol
-
         try:
             start = datetime.strptime(trade_date, "%Y-%m-%d")
             end = start + timedelta(days=holding_days + 7)  # buffer for weekends/holidays
             end_str = end.strftime("%Y-%m-%d")
+            config = getattr(self, "config", {})
+            if not isinstance(config, dict):
+                config = {}
+            benchmark_symbol = (
+                benchmark
+                or config.get("benchmark_symbol")
+                or DEFAULT_CONFIG.get("benchmark_symbol", "SPY")
+            )
 
-            # Normalize so the realized-return lookup hits the same instrument
-            # the analysis priced (e.g. XAUUSD -> GC=F) (#984). The benchmark is
-            # already a canonical Yahoo symbol from ``_resolve_benchmark``.
-            stock = yf.Ticker(normalize_symbol(ticker)).history(start=trade_date, end=end_str)
-            bench = yf.Ticker(benchmark).history(start=trade_date, end=end_str)
+            stock = self._fetch_close_prices(ticker, trade_date, end_str)
+            benchmark_prices = self._fetch_close_prices(benchmark_symbol, trade_date, end_str)
 
-            if len(stock) < 2 or len(bench) < 2:
+            if len(stock) < 2 or len(benchmark_prices) < 2:
                 return None, None, None
 
-            actual_days = min(holding_days, len(stock) - 1, len(bench) - 1)
+            actual_days = min(holding_days, len(stock) - 1, len(benchmark_prices) - 1)
             raw = float(
-                (stock["Close"].iloc[actual_days] - stock["Close"].iloc[0])
-                / stock["Close"].iloc[0]
+                (stock.iloc[actual_days] - stock.iloc[0])
+                / stock.iloc[0]
             )
-            bench_ret = float(
-                (bench["Close"].iloc[actual_days] - bench["Close"].iloc[0])
-                / bench["Close"].iloc[0]
+            benchmark_ret = float(
+                (benchmark_prices.iloc[actual_days] - benchmark_prices.iloc[0])
+                / benchmark_prices.iloc[0]
             )
-            alpha = raw - bench_ret
+            alpha = raw - benchmark_ret
             return raw, alpha, actual_days
         except Exception as e:
             logger.warning(
                 "Could not resolve outcome for %s on %s vs %s (will retry next run): %s",
-                ticker, trade_date, benchmark, e,
+                ticker, trade_date, benchmark_symbol, e,
             )
             return None, None, None
+
+    def _fetch_close_prices(self, symbol: str, start_date: str, end_date: str) -> pd.Series:
+        """Fetch close prices through the configured vendor router."""
+        report = route_to_vendor("get_stock_data", symbol, start_date, end_date)
+        return self._extract_close_prices(report)
+
+    @staticmethod
+    def _extract_close_prices(report: str) -> pd.Series:
+        """Parse a vendor Markdown/CSV report and return numeric close prices."""
+        if not report or not isinstance(report, str):
+            return pd.Series(dtype="float64")
+
+        csv_lines = [
+            line for line in report.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        if not csv_lines:
+            return pd.Series(dtype="float64")
+
+        try:
+            data = pd.read_csv(StringIO("\n".join(csv_lines)))
+        except Exception:
+            return pd.Series(dtype="float64")
+
+        close_column = next(
+            (column for column in data.columns if str(column).strip().lower() == "close"),
+            None,
+        )
+        if close_column is None:
+            return pd.Series(dtype="float64")
+
+        closes = pd.to_numeric(data[close_column], errors="coerce").dropna()
+        return closes.reset_index(drop=True)
 
     def _resolve_pending_entries(self, ticker: str) -> None:
         """Resolve pending log entries for ticker at the start of a new run.
@@ -328,6 +388,7 @@ class TradingAgentsGraph:
         a per-ticker SqliteSaver so a crashed run can resume from the last
         successful node on a subsequent invocation with the same ticker+date.
         """
+        self._apply_symbol_market_profile(company_name)
         self.ticker = company_name
 
         # Resolve any pending memory-log entries for this ticker before the pipeline runs.

@@ -45,6 +45,10 @@ bedrock = [
     "langchain-aws>=1.5.0",
 ]
 
+vietnam = [
+    "vnstock>=3.2.0",
+]
+
 [project.scripts]
 tradingagents = "cli.main:app"
 

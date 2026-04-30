@@ -1,4 +1,5 @@
 import os
+from importlib.util import find_spec
 from pathlib import Path
 
 import questionary
@@ -6,12 +7,16 @@ from dotenv import find_dotenv, set_key
 from rich.console import Console
 
 from cli.models import AnalystType, AssetType
+from tradingagents.default_config import (
+    apply_market_profile_for_symbol,
+    is_explicit_vietnam_symbol,
+)
 from tradingagents.llm_clients.api_key_env import get_api_key_env
 from tradingagents.llm_clients.model_catalog import get_model_options
 
 console = Console()
 
-TICKER_INPUT_EXAMPLES = "SPY, 0700.HK, BTC-USD"
+TICKER_INPUT_EXAMPLES = "SPY, CNC.TO, 7203.T, 0700.HK, FPT, HOSE:FPT, VNINDEX, BTC-USD, GC=F"
 
 ANALYST_ORDER = [
     ("Market Analyst", AnalystType.MARKET),
@@ -27,11 +32,12 @@ def is_valid_ticker_input(value: str) -> bool:
     """Whether a ticker entry is acceptable (charset + length).
 
     Allows the characters Yahoo symbols use, including ``=`` for futures/forex
-    like ``GC=F`` and ``EURUSD=X`` (#980), and ``^`` for indices. Empty input is
-    allowed (it defaults to SPY downstream).
+    like ``GC=F`` and ``EURUSD=X`` (#980), ``^`` for indices, and ``:`` for
+    explicit market prefixes such as ``HOSE:FPT``. Empty input is allowed (it
+    defaults to SPY downstream).
     """
     v = value.strip()
-    return not v or (all(ch.isalnum() or ch in "._-^=" for ch in v) and len(v) <= 32)
+    return not v or (all(ch.isalnum() or ch in "._-^=:" for ch in v) and len(v) <= 32)
 
 
 def get_ticker() -> str:
@@ -45,7 +51,7 @@ def get_ticker() -> str:
         f"Enter ticker symbol (e.g. {TICKER_INPUT_EXAMPLES}):",
         validate=lambda x: (
             is_valid_ticker_input(x)
-            or "Please enter a valid ticker symbol, e.g. AAPL, 000404.SZ, 0700.HK, GC=F."
+            or "Please enter a valid ticker symbol, e.g. AAPL, 000404.SZ, 0700.HK, HOSE:FPT, GC=F."
         ),
         style=questionary.Style(
             [
@@ -97,6 +103,16 @@ def filter_analysts_for_asset_type(
         for analyst in analysts
         if analyst != AnalystType.FUNDAMENTALS
     ]
+
+
+def apply_market_profile_for_ticker(config: dict, ticker: str) -> bool:
+    """Mutate CLI config for explicit Vietnam tickers and report whether it changed."""
+    return apply_market_profile_for_symbol(config, ticker)
+
+
+def is_vnstock_available() -> bool:
+    """Return whether the optional Vietnam data provider is importable."""
+    return find_spec("vnstock") is not None
 
 
 def get_analysis_date() -> str:

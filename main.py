@@ -8,6 +8,17 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 # want a hard-coded value that should ignore the environment.
 config = DEFAULT_CONFIG.copy()
 
+# Vietnam example after installing the optional provider: pip install ".[vietnam]"
+# config["market_profile"] = "vietnam"
+# config["benchmark_symbol"] = "VNINDEX"
+# config["currency"] = "VND"
+# config["data_vendors"] = {
+#     "core_stock_apis": "vnstock,yfinance",
+#     "technical_indicators": "vnstock,yfinance",
+#     "fundamental_data": "vnstock,yfinance",
+#     "news_data": "vnstock,yfinance",
+# }
+
 # Initialize with custom config
 ta = TradingAgentsGraph(debug=True, config=config)
 

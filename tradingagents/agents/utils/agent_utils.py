@@ -136,7 +136,8 @@ def build_instrument_context(
     context = (
         f"The {instrument_label} to analyze is `{ticker}`. "
         "Use this exact ticker in every tool call, report, and recommendation, "
-        "preserving any exchange suffix (e.g. `.TO`, `.L`, `.HK`, `.T`, `-USD`)."
+        "preserving any exchange suffix or market prefix "
+        "(e.g. `.TO`, `.L`, `.HK`, `.T`, `HOSE:FPT`, `.HM`, `.HN`, `-USD`)."
     )
 
     details = []
@@ -212,6 +213,5 @@ def create_msg_delete():
         return {"messages": removal_operations + [placeholder]}
 
     return delete_messages
-
 
 

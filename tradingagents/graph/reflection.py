@@ -1,14 +1,15 @@
 # TradingAgents/graph/reflection.py
 
-from typing import Any
+from typing import Any, Optional
 
 
 class Reflector:
     """Handles reflection on trading decisions."""
 
-    def __init__(self, quick_thinking_llm: Any):
+    def __init__(self, quick_thinking_llm: Any, benchmark_label: str = "SPY"):
         """Initialize the reflector with an LLM."""
         self.quick_thinking_llm = quick_thinking_llm
+        self.benchmark_label = benchmark_label or "SPY"
         self.log_reflection_prompt = self._get_log_reflection_prompt()
 
     def _get_log_reflection_prompt(self) -> str:
@@ -33,23 +34,24 @@ class Reflector:
         final_decision: str,
         raw_return: float,
         alpha_return: float,
-        benchmark_name: str = "SPY",
+        benchmark_name: Optional[str] = None,
     ) -> str:
         """Single reflection call on the final trade decision with outcome context.
 
         Used by Phase B deferred reflection. The final_trade_decision already
         synthesises all analyst insights, so no separate market context is needed.
         ``benchmark_name`` is the label used for the alpha line (e.g. ``"SPY"``
-        for US tickers, ``"^N225"`` for ``.T`` listings); defaults to SPY for
-        callers that haven't been updated to thread the benchmark through.
+        for US tickers, ``"^N225"`` for ``.T`` listings); when omitted, the
+        reflector's configured benchmark label is used.
         """
+        benchmark_label = benchmark_name or self.benchmark_label or "SPY"
         messages = [
             ("system", self.log_reflection_prompt),
             (
                 "human",
                 (
                     f"Raw return: {raw_return:+.1%}\n"
-                    f"Alpha vs {benchmark_name}: {alpha_return:+.1%}\n\n"
+                    f"Alpha vs {benchmark_label}: {alpha_return:+.1%}\n\n"
                     f"Final Decision:\n{final_decision}"
                 ),
             ),
