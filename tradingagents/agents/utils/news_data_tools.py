@@ -12,7 +12,7 @@ def get_news(
     Retrieve news data for a given ticker symbol.
     Uses the configured news_data vendor.
     Args:
-        ticker (str): Ticker symbol
+        ticker (str): Ticker symbol, e.g. AAPL, TSM, FPT, HOSE:FPT
         start_date (str): Start date in yyyy-mm-dd format
         end_date (str): End date in yyyy-mm-dd format
     Returns:
@@ -27,7 +27,7 @@ def get_global_news(
     limit: Annotated[int, "Maximum number of articles to return"] = 5,
 ) -> str:
     """
-    Retrieve global news data.
+    Retrieve global or market-wide news data.
     Uses the configured news_data vendor.
     Args:
         curr_date (str): Current date in yyyy-mm-dd format
@@ -46,7 +46,7 @@ def get_insider_transactions(
     Retrieve insider transaction information about a company.
     Uses the configured news_data vendor.
     Args:
-        ticker (str): Ticker symbol of the company
+        ticker (str): Ticker symbol of the company, e.g. AAPL, TSM, FPT, HOSE:FPT
     Returns:
         str: A report of insider transaction data
     """

@@ -6,9 +6,10 @@ from typing import Any
 class Reflector:
     """Handles reflection on trading decisions."""
 
-    def __init__(self, quick_thinking_llm: Any):
+    def __init__(self, quick_thinking_llm: Any, benchmark_label: str = "SPY"):
         """Initialize the reflector with an LLM."""
         self.quick_thinking_llm = quick_thinking_llm
+        self.benchmark_label = benchmark_label or "SPY"
         self.log_reflection_prompt = self._get_log_reflection_prompt()
 
     def _get_log_reflection_prompt(self) -> str:
@@ -45,7 +46,7 @@ class Reflector:
                 "human",
                 (
                     f"Raw return: {raw_return:+.1%}\n"
-                    f"Alpha vs SPY: {alpha_return:+.1%}\n\n"
+                    f"Alpha vs {self.benchmark_label}: {alpha_return:+.1%}\n\n"
                     f"Final Decision:\n{final_decision}"
                 ),
             ),
