@@ -127,7 +127,58 @@ def test_news_unavailable_returns_clear_message(monkeypatch):
 
 
 @pytest.mark.unit
-def test_insider_transactions_unavailable_returns_clear_message():
+def test_insider_transactions_returns_table_report(monkeypatch):
+    class FakeCompany:
+        seen_symbols = []
+
+        def __init__(self, symbol, source=None):
+            self.symbol = symbol
+            self.source = source
+            FakeCompany.seen_symbols.append(symbol)
+
+        def insider_trading(self):
+            return pd.DataFrame({
+                "transaction_date": ["2026-01-15"],
+                "person": ["Nguyen Van A"],
+                "transaction_type": ["Buy"],
+                "volume": [100000],
+            })
+
+    monkeypatch.setattr(vnstock, "_load_vnstock", lambda: _fake_module(Company=FakeCompany))
+
     result = vnstock.get_insider_transactions("HOSE:FPT")
 
-    assert result == "vnstock does not provide insider transaction data through the configured adapter for FPT."
+    assert FakeCompany.seen_symbols == ["FPT"]
+    assert "# Insider Transactions data for FPT" in result
+    assert "# Vendor: vnstock" in result
+    assert "transaction_date,person,transaction_type,volume" in result
+    assert "2026-01-15,Nguyen Van A,Buy,100000" in result
+
+
+@pytest.mark.unit
+def test_insider_transactions_empty_returns_clear_message(monkeypatch):
+    class FakeCompany:
+        def __init__(self, symbol, source=None):
+            self.symbol = symbol
+
+        def insider_trading(self):
+            return pd.DataFrame()
+
+    monkeypatch.setattr(vnstock, "_load_vnstock", lambda: _fake_module(Company=FakeCompany))
+
+    result = vnstock.get_insider_transactions("HOSE:FPT")
+
+    assert result == "No vnstock insider transaction data available for FPT."
+
+
+@pytest.mark.unit
+def test_insider_transactions_unavailable_returns_clear_message(monkeypatch):
+    class FakeCompany:
+        def __init__(self, symbol, source=None):
+            self.symbol = symbol
+
+    monkeypatch.setattr(vnstock, "_load_vnstock", lambda: _fake_module(Company=FakeCompany))
+
+    result = vnstock.get_insider_transactions("HOSE:FPT")
+
+    assert result == "No vnstock insider transaction data available for FPT."
