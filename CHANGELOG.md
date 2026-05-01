@@ -15,6 +15,19 @@ Breaking changes within the 0.x line are called out explicitly.
   configuration, and CLI/docs examples for local symbols such as `FPT` and
   `HOSE:FPT`.
 
+### Changed
+
+- Added a global `llm_timeout` config option (default `30` seconds) and pass it
+  through when constructing provider clients so long-running model calls fail
+  fast instead of hanging indefinitely.
+
+### Fixed
+
+- Vietnam technical-indicator output on weekends and holidays now falls back to
+  the latest available trading session and returns a compact trailing window
+  instead of expanding repeated non-trading-day placeholders, reducing prompt
+  size for Market Analyst runs.
+
 ## [0.2.4] — 2026-04-25
 
 ### Added

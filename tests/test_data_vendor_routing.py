@@ -27,6 +27,7 @@ def test_vnstock_registered_for_required_methods():
         "get_income_statement",
         "get_news",
         "get_global_news",
+        "get_insider_transactions",
     ]:
         assert "vnstock" in interface.VENDOR_METHODS[method]
 
@@ -104,6 +105,31 @@ def test_route_plain_symbol_keeps_configured_yfinance(monkeypatch):
 
     assert result == "yfinance data"
     assert calls == ["yfinance"]
+
+
+@pytest.mark.unit
+def test_route_explicit_vietnam_insider_request_prefers_vnstock(monkeypatch):
+    calls = []
+
+    def yfinance(*args, **kwargs):
+        calls.append("yfinance")
+        return "yfinance insider data"
+
+    def vnstock(*args, **kwargs):
+        calls.append("vnstock")
+        return "vnstock insider data"
+
+    monkeypatch.setitem(
+        interface.VENDOR_METHODS,
+        "get_insider_transactions",
+        {"yfinance": yfinance, "vnstock": vnstock},
+    )
+    set_config({"data_vendors": {"news_data": "yfinance"}})
+
+    result = interface.route_to_vendor("get_insider_transactions", "HOSE:FPT")
+
+    assert result == "vnstock insider data"
+    assert calls == ["vnstock"]
 
 
 @pytest.mark.unit

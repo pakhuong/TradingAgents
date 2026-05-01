@@ -297,27 +297,38 @@ def get_indicator(
     provider_symbol = _normalize_vietnam_symbol(symbol)
     data = _fetch_ohlcv(provider_symbol, warmup_start.strftime("%Y-%m-%d"), curr_date)
 
-    indicator_data = {}
+    indicator_rows = pd.DataFrame(columns=["Date", indicator])
     if not data.empty:
         stats_df = wrap(data.copy())
         stats_df["Date"] = pd.to_datetime(stats_df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
         stats_df[indicator]
-        for _, row in stats_df.iterrows():
-            value = row[indicator]
-            indicator_data[row["Date"]] = "N/A" if pd.isna(value) else str(value)
+        indicator_rows = stats_df[["Date", indicator]].copy()
+        indicator_rows = indicator_rows.dropna(subset=["Date"])
+        indicator_rows = indicator_rows[indicator_rows["Date"] <= curr_date].reset_index(drop=True)
 
-    date_values = []
-    current_dt = curr_date_dt
-    while current_dt >= before:
-        date_str = current_dt.strftime("%Y-%m-%d")
-        date_values.append(
-            (date_str, indicator_data.get(date_str, "N/A: Not a trading day (weekend or holiday)"))
+    if indicator_rows.empty:
+        return (
+            f"## {indicator} values up to {curr_date}:\n\n"
+            + "No trading-session data available.\n\n"
+            + INDICATOR_DESCRIPTIONS[indicator]
         )
-        current_dt = current_dt - relativedelta(days=1)
 
-    ind_string = "".join(f"{date_str}: {value}\n" for date_str, value in date_values)
+    rendered_rows = indicator_rows.tail(max(look_back_days + 1, 1)).reset_index(drop=True)
+    latest_session = rendered_rows["Date"].iloc[-1]
+    header_start = rendered_rows["Date"].iloc[0]
+    note = ""
+    if latest_session != curr_date:
+        note = (
+            f"Note: {curr_date} is not a trading day. Using the latest available trading session on {latest_session}.\n\n"
+        )
+
+    ind_string = "".join(
+        f"{row['Date']}: {'N/A' if pd.isna(row[indicator]) else row[indicator]}\n"
+        for _, row in rendered_rows.iterrows()
+    )
     return (
-        f"## {indicator} values from {before.strftime('%Y-%m-%d')} to {curr_date}:\n\n"
+        f"## {indicator} values from {header_start} to {latest_session}:\n\n"
+        + note
         + ind_string
         + "\n\n"
         + INDICATOR_DESCRIPTIONS[indicator]
@@ -588,4 +599,7 @@ def get_insider_transactions(
     ticker: Annotated[str, "Ticker symbol"],
 ) -> str:
     provider_symbol = _normalize_vietnam_symbol(ticker)
-    return f"vnstock does not provide insider transaction data through the configured adapter for {provider_symbol}."
+    insider_transactions = _call_company_table(provider_symbol, "insider_trading")
+    if insider_transactions.empty:
+        return f"No vnstock insider transaction data available for {provider_symbol}."
+    return _format_table_report(f"Insider Transactions data for {provider_symbol}", insider_transactions)

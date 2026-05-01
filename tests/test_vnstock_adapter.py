@@ -87,6 +87,44 @@ def test_get_indicator_uses_vnstock_ohlcv(monkeypatch):
 
 
 @pytest.mark.unit
+def test_get_indicator_compacts_non_trading_day_output(monkeypatch):
+    dates = pd.to_datetime([
+        "2025-12-30",
+        "2025-12-31",
+        "2026-01-02",
+        "2026-01-05",
+        "2026-01-06",
+        "2026-01-07",
+        "2026-01-08",
+        "2026-01-09",
+    ])
+    data = pd.DataFrame({
+        "time": dates,
+        "open": range(100, 100 + len(dates)),
+        "high": range(101, 101 + len(dates)),
+        "low": range(99, 99 + len(dates)),
+        "close": range(100, 100 + len(dates)),
+        "volume": [1000] * len(dates),
+    })
+
+    class IndicatorQuote:
+        def __init__(self, symbol, source=None):
+            self.symbol = symbol
+
+        def history(self, start, end, interval="1D"):
+            return data
+
+    monkeypatch.setattr(vnstock, "_load_vnstock", lambda: _fake_module(Quote=IndicatorQuote))
+
+    result = vnstock.get_indicator("FPT", "rsi", "2026-01-10", 5)
+
+    assert "Note: 2026-01-10 is not a trading day. Using the latest available trading session on 2026-01-09." in result
+    assert "2026-01-09:" in result
+    assert "2026-01-10:" not in result
+    assert "Not a trading day (weekend or holiday)" not in result
+
+
+@pytest.mark.unit
 def test_get_indicator_rejects_unsupported_indicator():
     with pytest.raises(ValueError, match="Indicator nope is not supported"):
         vnstock.get_indicator("FPT", "nope", "2026-01-10", 5)
@@ -127,7 +165,58 @@ def test_news_unavailable_returns_clear_message(monkeypatch):
 
 
 @pytest.mark.unit
-def test_insider_transactions_unavailable_returns_clear_message():
+def test_insider_transactions_returns_table_report(monkeypatch):
+    class FakeCompany:
+        seen_symbols = []
+
+        def __init__(self, symbol, source=None):
+            self.symbol = symbol
+            self.source = source
+            FakeCompany.seen_symbols.append(symbol)
+
+        def insider_trading(self):
+            return pd.DataFrame({
+                "transaction_date": ["2026-01-15"],
+                "person": ["Nguyen Van A"],
+                "transaction_type": ["Buy"],
+                "volume": [100000],
+            })
+
+    monkeypatch.setattr(vnstock, "_load_vnstock", lambda: _fake_module(Company=FakeCompany))
+
     result = vnstock.get_insider_transactions("HOSE:FPT")
 
-    assert result == "vnstock does not provide insider transaction data through the configured adapter for FPT."
+    assert FakeCompany.seen_symbols == ["FPT"]
+    assert "# Insider Transactions data for FPT" in result
+    assert "# Vendor: vnstock" in result
+    assert "transaction_date,person,transaction_type,volume" in result
+    assert "2026-01-15,Nguyen Van A,Buy,100000" in result
+
+
+@pytest.mark.unit
+def test_insider_transactions_empty_returns_clear_message(monkeypatch):
+    class FakeCompany:
+        def __init__(self, symbol, source=None):
+            self.symbol = symbol
+
+        def insider_trading(self):
+            return pd.DataFrame()
+
+    monkeypatch.setattr(vnstock, "_load_vnstock", lambda: _fake_module(Company=FakeCompany))
+
+    result = vnstock.get_insider_transactions("HOSE:FPT")
+
+    assert result == "No vnstock insider transaction data available for FPT."
+
+
+@pytest.mark.unit
+def test_insider_transactions_unavailable_returns_clear_message(monkeypatch):
+    class FakeCompany:
+        def __init__(self, symbol, source=None):
+            self.symbol = symbol
+
+    monkeypatch.setattr(vnstock, "_load_vnstock", lambda: _fake_module(Company=FakeCompany))
+
+    result = vnstock.get_insider_transactions("HOSE:FPT")
+
+    assert result == "No vnstock insider transaction data available for FPT."
