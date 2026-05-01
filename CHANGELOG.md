@@ -55,6 +55,9 @@ structured output.
   prediction-market lookup returns a no-data sentinel.
 - **Analyst prompts lead with the current date** so tool-call date ranges anchor
   to the run date rather than the model's training cutoff. (#836)
+- Added a global `llm_timeout` config option (default `30` seconds) and pass it
+  through when constructing provider clients so long-running model calls fail
+  fast instead of hanging indefinitely.
 
 ### Fixed
 
@@ -68,6 +71,10 @@ structured output.
   object-form `tool_choice`; a thinking model that returns no parsed result falls
   back to free text; null-ish strings in optional price fields coerce to `None`.
   (#1038, #1051, #1057)
+- Vietnam technical-indicator output on weekends and holidays now falls back to
+  the latest available trading session and returns a compact trailing window
+  instead of expanding repeated non-trading-day placeholders, reducing prompt
+  size for Market Analyst runs.
 
 ### Removed
 
