@@ -155,6 +155,10 @@ class TradingAgentsGraph:
         """Get provider-specific kwargs for LLM client creation."""
         kwargs = {}
         provider = self.config.get("llm_provider", "").lower()
+        timeout = self.config.get("llm_timeout")
+
+        if timeout is not None:
+            kwargs["timeout"] = timeout
 
         if provider == "google":
             thinking_level = self.config.get("google_thinking_level")

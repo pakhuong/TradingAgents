@@ -228,6 +228,7 @@ config = DEFAULT_CONFIG.copy()
 config["llm_provider"] = "openai"        # openai, google, anthropic, xai, deepseek, qwen, qwen-cn, glm, glm-cn, minimax, minimax-cn, openrouter, ollama, azure
 config["deep_think_llm"] = "gpt-5.4"     # Model for complex reasoning
 config["quick_think_llm"] = "gpt-5.4-mini" # Model for quick tasks
+config["llm_timeout"] = 30               # Per-call LLM timeout in seconds
 config["max_debate_rounds"] = 2
 
 ta = TradingAgentsGraph(debug=True, config=config)
@@ -248,6 +249,8 @@ pip install ".[vietnam]"
 ```
 
 The interactive CLI automatically switches explicit Vietnam symbols such as `HOSE:FPT`, `HNX:SHS`, `VIC.HM`, `VNINDEX`, and `VN30` to the Vietnam data profile. If `vnstock` is not installed, the CLI stops before running the LLM agents and prints the install command instead of producing an empty-data report.
+
+For technical indicators on weekends and exchange holidays, the `vnstock` adapter now falls back to the latest available trading session and returns a compact trailing series instead of expanding every non-trading calendar date into repeated placeholder rows. This keeps Vietnam market prompts smaller and avoids the analyst loop stalling on holiday runs.
 
 Then configure the vendor router and market metadata:
 
@@ -274,6 +277,7 @@ print(decision)
 The router also supports method-level overrides through `tool_vendors`, for example `config["tool_vendors"] = {"get_stock_data": "vnstock,yfinance"}`. Users are responsible for complying with `vnstock` and upstream data-source terms; TradingAgents remains a research framework and is not financial advice.
 
 See `tradingagents/default_config.py` for all configuration options.
+`llm_timeout` defaults to `30` seconds and is forwarded to provider clients that support request timeouts.
 
 ## Persistence and Recovery
 
