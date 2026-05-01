@@ -588,4 +588,7 @@ def get_insider_transactions(
     ticker: Annotated[str, "Ticker symbol"],
 ) -> str:
     provider_symbol = _normalize_vietnam_symbol(ticker)
-    return f"vnstock does not provide insider transaction data through the configured adapter for {provider_symbol}."
+    insider_transactions = _call_company_table(provider_symbol, "insider_trading")
+    if insider_transactions.empty:
+        return f"No vnstock insider transaction data available for {provider_symbol}."
+    return _format_table_report(f"Insider Transactions data for {provider_symbol}", insider_transactions)

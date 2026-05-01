@@ -1,8 +1,8 @@
 ---
 title: Vietnam Equity Market Data Support With vnstock
-version: 1.1
+version: 1.2
 date_created: 2026-04-30
-last_updated: 2026-04-30
+last_updated: 2026-05-01
 owner: TradingAgents maintainers
 tags: [data, vietnam, vnstock, market-support, vendor-adapter]
 ---
@@ -18,7 +18,7 @@ This specification applies to the TradingAgents Python repository. It is intende
 The scope includes:
 
 - Adding a `vnstock` data vendor adapter under `tradingagents/dataflows/`.
-- Routing Vietnam-capable stock, technical indicator, fundamental, and news methods through `tradingagents/dataflows/interface.py`.
+- Routing Vietnam-capable stock, technical indicator, fundamental, news, and insider-transaction methods through `tradingagents/dataflows/interface.py`.
 - Adding market profile configuration for Vietnam, including native currency and benchmark index.
 - Automatically applying the Vietnam market profile for explicit Vietnam symbols before graph data fetches, including memory-log outcome resolution.
 - Preventing explicit Vietnam symbols from leaking to yfinance or Alpha Vantage fallback paths that are known to produce invalid-symbol errors for forms such as `HOSE:VIC`.
@@ -49,6 +49,7 @@ The scope excludes:
 - **VND**: Vietnamese dong, the native currency for Vietnam equity prices.
 - **Provider symbol**: The exact symbol format expected by a data provider. For `vnstock`, common Vietnam equity symbols are unqualified uppercase local codes such as `FPT`, `VNM`, and `TCB`.
 - **Explicit Vietnam symbol**: A user-facing ticker that unambiguously identifies the Vietnam market without external context. Explicit forms include `HOSE:<symbol>`, `HSX:<symbol>`, `HNX:<symbol>`, `UPCOM:<symbol>`, `.HM`, `.HN`, `.UPCOM`, `VNINDEX`, and `VN30`. Plain local codes such as `FPT` and `VIC` are valid Vietnam symbols but are not explicit because they may be ambiguous without user configuration.
+- **Insider transaction data**: Issuer disclosures describing purchases, sales, registrations, or ownership changes by insiders, executives, major shareholders, or related internal stakeholders.
 
 ## 3. Requirements, Constraints & Guidelines
 
@@ -81,7 +82,8 @@ The scope excludes:
 - **REQ-016**: Shared configuration helpers shall detect explicit Vietnam symbols and apply the Vietnam profile consistently for CLI and programmatic graph runs.
 - **REQ-017**: `TradingAgentsGraph.propagate()` shall apply the Vietnam profile for explicit Vietnam symbols before any ticker-scoped data fetch, including pending memory-log outcome resolution.
 - **REQ-018**: The vendor router shall force ticker-scoped requests for explicit Vietnam symbols to `vnstock` when a `vnstock` implementation exists, even when the current vendor configuration starts with yfinance or Alpha Vantage.
-- **REQ-019**: The `vnstock` adapter shall return a clear unsupported-data message for insider transactions instead of allowing explicit Vietnam symbols to fall through to yfinance.
+- **REQ-019**: The `vnstock` adapter shall wire `get_insider_transactions(ticker)` to a supported `vnstock` insider transaction capability, such as `company.insider_trading()` or an equivalent current public API in the installed `vnstock` version.
+- **REQ-020**: If the installed `vnstock` version does not expose insider transaction retrieval or returns no insider rows for the requested ticker, the adapter shall return a clear unavailable-or-no-data message instead of allowing explicit Vietnam symbols to fall through to yfinance.
 
 ### Compatibility Requirements
 
@@ -245,6 +247,8 @@ balance_sheet = stock.finance.balance_sheet(period="quarter", lang="en", dropna=
 income_statement = stock.finance.income_statement(period="quarter", lang="en", dropna=True)
 cash_flow = stock.finance.cash_flow(period="quarter", dropna=True)
 ratios = stock.finance.ratio(period="quarter", lang="en", dropna=True)
+company = stock.company
+insider_transactions = company.insider_trading()
 ```
 
 The coding agent shall verify exact method names against the installed `vnstock` version before implementing. If the installed package exposes a different API, adapt the wrapper while preserving the TradingAgents function signatures.
@@ -325,10 +329,14 @@ No vnstock news data available for FPT between 2026-01-01 and 2026-01-31.
 
 `get_global_news(curr_date, look_back_days, limit)` shall return Vietnam market macro headlines if available. If not available through `vnstock`, return a clear message that the vendor does not provide Vietnam macro news rather than falling back internally to US/global yfinance queries. Cross-vendor fallback shall remain the router's responsibility.
 
-`get_insider_transactions(ticker)` shall return Vietnam insider transaction data if a supported `vnstock` API is available. If the adapter does not support insider transaction retrieval, it shall return a clear unsupported-data message such as:
+`get_insider_transactions(ticker)` shall call a `vnstock` company insider transaction capability when the installed version exposes one, such as `stock.company.insider_trading()` or an equivalent current public API.
+
+If insider transaction data is returned, the adapter shall format it as Markdown plus CSV using the same table-report conventions as other tabular `vnstock` outputs.
+
+If the installed `vnstock` version does not expose insider transaction retrieval, or the call returns no rows, the adapter shall return a clear unavailable-or-no-data message rather than falling through internally to yfinance. Example:
 
 ```text
-vnstock does not provide insider transaction data through the configured adapter for FPT.
+No vnstock insider transaction data available for FPT.
 ```
 
 ### 4.8 Benchmark Return Contract
@@ -365,7 +373,7 @@ Required code files:
 - `tradingagents/agents/utils/core_stock_tools.py`: Vietnam examples in docstrings or annotations.
 - `tradingagents/agents/utils/technical_indicators_tools.py`: Vietnam examples in docstrings or annotations.
 - `tradingagents/agents/utils/fundamental_data_tools.py`: Vietnam examples in docstrings or annotations.
-- `tradingagents/agents/utils/news_data_tools.py`: Vietnam examples and vendor-neutral news wording.
+- `tradingagents/agents/utils/news_data_tools.py`: Vietnam examples and vendor-neutral news and insider-transaction wording.
 - `cli/utils.py`: ticker prompt examples.
 - `cli/main.py`: CLI prompt examples and default text if appropriate.
 - `pyproject.toml`: add `vnstock` dependency or optional dependency group.
@@ -376,7 +384,7 @@ Required test files:
 
 - `tests/test_ticker_symbol_handling.py`: Vietnam symbol preservation and normalization cases.
 - `tests/test_memory_log.py`: configurable benchmark behavior replacing hardcoded SPY assumptions.
-- `tests/test_vnstock_adapter.py`: new tests for adapter helpers and output formatting.
+- `tests/test_vnstock_adapter.py`: new tests for adapter helpers, output formatting, and insider transaction success and fallback behavior.
 - `tests/test_data_vendor_routing.py`: new or existing router tests for `vnstock` registration and fallback.
 
 Optional documentation files:
@@ -400,8 +408,9 @@ Optional documentation files:
 - **AC-012**: Given default yfinance configuration and an explicit Vietnam symbol such as `HOSE:VIC`, when a ticker-scoped data request is routed, then the request uses `vnstock` and does not call yfinance.
 - **AC-013**: Given default yfinance configuration and a plain symbol such as `VIC`, when a ticker-scoped data request is routed, then the request follows the configured yfinance path unless the user has explicitly set the Vietnam profile or `vnstock` vendor chain.
 - **AC-014**: Given `TradingAgentsGraph.propagate("HOSE:VIC", trade_date)`, when the graph starts, then the graph applies the Vietnam profile, uses `VNINDEX` as the benchmark, and sets ticker-scoped data vendors to `vnstock,yfinance` before pending memory-log outcome resolution.
-- **AC-015**: Given `vnstock` does not support insider transactions, when `get_insider_transactions("HOSE:FPT")` is called through the `vnstock` adapter, then it returns a clear unsupported-data message instead of falling through to yfinance.
-- **AC-016**: Given a coding agent reads this specification, it can identify all required files, interfaces, and tests without additional repository discovery.
+- **AC-015**: Given mocked `vnstock` company data exposes `insider_trading()` and returns insider rows for `FPT`, when `get_insider_transactions("HOSE:FPT")` is called through the `vnstock` adapter, then the result contains a Markdown header plus CSV insider transaction data for `FPT`.
+- **AC-016**: Given the installed `vnstock` version does not expose insider transactions or returns no insider rows, when `get_insider_transactions("HOSE:FPT")` is called through the `vnstock` adapter, then it returns a clear unavailable-or-no-data message instead of falling through to yfinance.
+- **AC-017**: Given a coding agent reads this specification, it can identify all required files, interfaces, and tests without additional repository discovery.
 
 ## 6. Test Automation Strategy
 
@@ -413,6 +422,7 @@ Optional documentation files:
 - **Symbol Tests**: Assert Vietnam symbol normalization while preserving existing exchange-qualified ticker behavior.
 - **Explicit Routing Tests**: Assert that explicit Vietnam symbols route to `vnstock` even when the default vendor config is yfinance, and that plain symbols continue to follow the configured vendor.
 - **DataFrame Tests**: Use small Pandas DataFrames to test OHLCV normalization, date filtering, and CSV formatting.
+- **Insider Transaction Tests**: Mock `vnstock` company insider transaction responses and assert both successful CSV formatting and clear unavailable-or-empty fallback behavior.
 - **Benchmark Tests**: Mock benchmark data and assert `TradingAgentsGraph._fetch_returns` or its replacement uses the configured benchmark symbol.
 - **Graph Profile Tests**: Assert that `TradingAgentsGraph.propagate()` or its profile helper applies the Vietnam profile before data fetches for explicit Vietnam symbols.
 - **Fallback Tests**: Simulate `DataVendorUnavailableError` from `vnstock` and assert the router continues to the next configured vendor for non-explicit symbols. For explicit Vietnam symbols, assert that the router does not call yfinance as a silent fallback.
@@ -435,6 +445,8 @@ TradingAgents currently supports provider routing for yfinance and Alpha Vantage
 
 `vnstock` is the recommended first provider because it is Python-native, accessible without paid credentials, and covers the minimum data categories required for the existing TradingAgents workflow. Paid or broker-backed providers such as FiinQuant and SSI FastConnect may be more robust for real-time or institutional workloads, but they introduce onboarding and credential requirements that are not suitable for a first open-source integration.
 
+The upstream `vnstock` unified API also exposes issuer-level insider transaction data, so the TradingAgents adapter should use that local Vietnam path directly instead of treating insider transactions as permanently unsupported.
+
 The main correctness issue outside the data adapter is benchmark alpha. The current memory-log outcome path uses `SPY`, which is not an appropriate benchmark for Vietnam-listed equities. A market-aware benchmark setting fixes this while preserving existing default behavior.
 
 ## 8. Dependencies & External Integrations
@@ -456,6 +468,7 @@ The main correctness issue outside the data adapter is benchmark alpha. The curr
 - **DAT-001**: Vietnam OHLCV data - Must include enough fields to compute technical indicators.
 - **DAT-002**: Vietnam financial statement data - Must include balance sheet, cash flow, and income statement tables when available.
 - **DAT-003**: Vietnam benchmark index data - Must include historical close prices for `VNINDEX` or an equivalent configured benchmark.
+- **DAT-004**: Vietnam insider transaction data - Must expose company insider dealing or disclosure records when the installed `vnstock` version supports them.
 
 ### Technology Platform Dependencies
 
@@ -538,10 +551,21 @@ The router-level guard applies even when the configured vendor starts with yfina
 No vnstock news data available for FPT between 2026-01-01 and 2026-01-31.
 ```
 
-### 9.7 Insider Transactions Unavailable Example
+### 9.7 Insider Transactions Success Example
 
 ```text
-vnstock does not provide insider transaction data through the configured adapter for FPT.
+# Insider Transactions data for FPT
+# Vendor: vnstock
+# Data retrieved on: 2026-04-30 HH:MM:SS
+
+transaction_date,person,transaction_type,volume
+2026-01-15,Nguyen Van A,Buy,100000
+```
+
+### 9.8 Insider Transactions Unavailable Example
+
+```text
+No vnstock insider transaction data available for FPT.
 ```
 
 ## 10. Validation Criteria
@@ -550,13 +574,14 @@ vnstock does not provide insider transaction data through the configured adapter
 - **VAL-002**: Existing ticker preservation tests still pass.
 - **VAL-003**: `vnstock` vendor registration is discoverable from `tradingagents/dataflows/interface.py`.
 - **VAL-004**: The default config remains non-Vietnam and benchmarked to `SPY`.
-- **VAL-005**: The documented Vietnam config routes stock, indicator, fundamental, and news calls to `vnstock` first.
+- **VAL-005**: The documented Vietnam config routes stock, indicator, fundamental, news, and insider transaction calls to `vnstock` first when a `vnstock` implementation exists.
 - **VAL-006**: The adapter formats OHLCV and financial statement data as strings consumable by the existing agent tools.
 - **VAL-007**: The memory-log reflection prompt uses the configured benchmark label.
 - **VAL-008**: Documentation includes at least one runnable Python configuration example for Vietnam equities.
 - **VAL-009**: No default test requires real API keys or live network access.
 - **VAL-010**: Explicit Vietnam symbols cannot trigger yfinance invalid-symbol or delisted warnings through ticker-scoped routed tool calls.
 - **VAL-011**: Programmatic graph runs using explicit Vietnam symbols apply the Vietnam profile before resolving pending memory-log entries.
+- **VAL-012**: The spec defines both insider transaction success behavior and the unavailable-or-empty fallback behavior for the `vnstock` adapter.
 
 ## 11. Related Specifications / Further Reading
 
