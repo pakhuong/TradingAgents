@@ -30,6 +30,11 @@ def _fake_module(**attrs):
     return types.SimpleNamespace(**attrs)
 
 
+@pytest.fixture(autouse=True)
+def disable_real_sponsor_imports(monkeypatch):
+    monkeypatch.setattr(vnstock, "_optional_import", lambda module_name: None)
+
+
 @pytest.mark.unit
 def test_normalize_vietnam_symbol_variants():
     assert vnstock._normalize_vietnam_symbol(" fpt ") == "FPT"
@@ -272,3 +277,297 @@ def test_insider_transactions_unavailable_returns_clear_message(monkeypatch):
     result = vnstock.get_insider_transactions("HOSE:FPT")
 
     assert result == "No vnstock insider transaction data available for FPT."
+
+
+@pytest.mark.unit
+def test_sponsor_quote_mapping_prefers_vnstock_data(monkeypatch):
+    class SponsorQuote:
+        seen_symbols = []
+
+        def __init__(self, symbol, source=None):
+            self.symbol = symbol
+            self.source = source
+            SponsorQuote.seen_symbols.append((symbol, source))
+
+        def history(self, start, end, interval="1D"):
+            return pd.DataFrame({
+                "time": ["2026-01-02", "2026-01-03"],
+                "open": [100000, 100500],
+                "high": [101000, 101500],
+                "low": [99500, 100000],
+                "close": [100500, 101000],
+                "volume": [1200, 1400],
+            })
+
+    monkeypatch.setattr(
+        vnstock,
+        "_load_vnstock",
+        lambda: (_ for _ in ()).throw(AssertionError("base vnstock should not import when vnstock_data is available")),
+    )
+    monkeypatch.setattr(
+        vnstock,
+        "_optional_import",
+        lambda module_name: _fake_module(Quote=SponsorQuote) if module_name == "vnstock_data" else None,
+    )
+
+    result = vnstock.get_stock("HOSE:FPT", "2026-01-01", "2026-01-31")
+
+    assert SponsorQuote.seen_symbols == [("FPT", "VCI")]
+    assert "2026-01-02,100000,101000,99500,100500,1200" in result
+
+
+@pytest.mark.unit
+def test_sponsor_finance_mapping_prefers_vnstock_data(monkeypatch):
+    class SponsorFinance:
+        seen_symbols = []
+
+        def __init__(self, symbol, source=None):
+            self.symbol = symbol
+            self.source = source
+            SponsorFinance.seen_symbols.append((symbol, source))
+
+        def balance_sheet(self, period="quarter", lang="en", dropna=True):
+            return pd.DataFrame({
+                "period": ["2025-Q4", "2026-Q1"],
+                "total_assets": [100, 120],
+            })
+
+    monkeypatch.setattr(
+        vnstock,
+        "_load_vnstock",
+        lambda: (_ for _ in ()).throw(AssertionError("base vnstock should not import when vnstock_data is available")),
+    )
+    monkeypatch.setattr(
+        vnstock,
+        "_optional_import",
+        lambda module_name: _fake_module(Finance=SponsorFinance) if module_name == "vnstock_data" else None,
+    )
+
+    result = vnstock.get_balance_sheet("FPT", curr_date="2026-03-31")
+
+    assert SponsorFinance.seen_symbols == [("FPT", "VCI")]
+    assert "2025-Q4,100" in result
+    assert "2026-Q1,120" in result
+
+
+@pytest.mark.unit
+def test_sponsor_company_mapping_prefers_vnstock_data_for_insider_transactions(monkeypatch):
+    class SponsorCompany:
+        seen_symbols = []
+
+        def __init__(self, symbol, source=None):
+            self.symbol = symbol
+            self.source = source
+            SponsorCompany.seen_symbols.append((symbol, source))
+
+        def insider_trading(self):
+            return pd.DataFrame({
+                "transaction_date": ["2026-01-15"],
+                "person": ["Nguyen Van A"],
+                "transaction_type": ["Buy"],
+                "volume": [100000],
+            })
+
+    monkeypatch.setattr(
+        vnstock,
+        "_load_vnstock",
+        lambda: (_ for _ in ()).throw(AssertionError("base vnstock should not import when vnstock_data is available")),
+    )
+    monkeypatch.setattr(
+        vnstock,
+        "_optional_import",
+        lambda module_name: _fake_module(Company=SponsorCompany) if module_name == "vnstock_data" else None,
+    )
+
+    result = vnstock.get_insider_transactions("HOSE:FPT")
+
+    assert SponsorCompany.seen_symbols == [("FPT", "VCI")]
+    assert "2026-01-15,Nguyen Van A,Buy,100000" in result
+
+
+@pytest.mark.unit
+def test_get_news_stays_company_scoped_even_when_vnstock_news_is_installed(monkeypatch):
+    class SponsorCompany:
+        seen_symbols = []
+
+        def __init__(self, symbol, source=None):
+            self.symbol = symbol
+            self.source = source
+            SponsorCompany.seen_symbols.append((symbol, source))
+
+        def news(self):
+            return pd.DataFrame({
+                "publish_date": ["2026-01-03"],
+                "title": ["FPT earnings update"],
+            })
+
+    class UnexpectedCrawler:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("vnstock_news crawler should not be used for issuer-scoped get_news")
+
+    def optional_import(module_name):
+        if module_name == "vnstock_data":
+            return _fake_module(Company=SponsorCompany)
+        if module_name == "vnstock_news":
+            return _fake_module(Crawler=UnexpectedCrawler)
+        return None
+
+    monkeypatch.setattr(
+        vnstock,
+        "_load_vnstock",
+        lambda: (_ for _ in ()).throw(AssertionError("base vnstock should not import when vnstock_data is available")),
+    )
+    monkeypatch.setattr(vnstock, "_optional_import", optional_import)
+
+    result = vnstock.get_news("FPT", "2026-01-01", "2026-01-31")
+
+    assert SponsorCompany.seen_symbols == [("FPT", "VCI")]
+    assert "FPT earnings update" in result
+
+
+@pytest.mark.unit
+def test_get_indicator_prefers_vnstock_ta_when_available(monkeypatch):
+    data = pd.DataFrame({
+        "Date": ["2026-01-08", "2026-01-09", "2026-01-10"],
+        "Open": [100, 101, 102],
+        "High": [101, 102, 103],
+        "Low": [99, 100, 101],
+        "Close": [100, 101, 102],
+        "Volume": [1000, 1000, 1000],
+    })
+
+    class FakeIndicator:
+        seen_lengths = []
+
+        def __init__(self, frame):
+            FakeIndicator.seen_lengths.append(len(frame))
+
+        def rsi(self, length=14):
+            assert length == 14
+            return pd.Series([45.0, 46.5, 48.0], name="rsi")
+
+    def unexpected_wrap(_data):
+        raise AssertionError("stockstats fallback should not run when vnstock_ta succeeds")
+
+    monkeypatch.setattr(vnstock, "_fetch_ohlcv", lambda *args, **kwargs: data.copy())
+    monkeypatch.setattr(vnstock, "wrap", unexpected_wrap)
+    monkeypatch.setattr(
+        vnstock,
+        "_optional_import",
+        lambda module_name: _fake_module(Indicator=FakeIndicator) if module_name == "vnstock_ta" else None,
+    )
+
+    result = vnstock.get_indicator("FPT", "rsi", "2026-01-10", 2)
+
+    assert FakeIndicator.seen_lengths == [3]
+    assert "2026-01-08: 45.0" in result
+    assert "2026-01-10: 48.0" in result
+
+
+@pytest.mark.unit
+def test_get_indicator_falls_back_to_stockstats_when_ta_missing(monkeypatch):
+    data = pd.DataFrame({
+        "Date": ["2026-01-08", "2026-01-09", "2026-01-10"],
+        "Open": [100, 101, 102],
+        "High": [101, 102, 103],
+        "Low": [99, 100, 101],
+        "Close": [100, 101, 102],
+        "Volume": [1000, 1000, 1000],
+    })
+    wrap_calls = []
+
+    def fake_wrap(frame):
+        wrap_calls.append(len(frame))
+        wrapped = frame.copy()
+        wrapped["rsi"] = [40.0, 41.0, 42.0]
+        return wrapped
+
+    monkeypatch.setattr(vnstock, "_fetch_ohlcv", lambda *args, **kwargs: data.copy())
+    monkeypatch.setattr(vnstock, "wrap", fake_wrap)
+    monkeypatch.setattr(vnstock, "_optional_import", lambda module_name: None)
+
+    result = vnstock.get_indicator("FPT", "rsi", "2026-01-10", 2)
+
+    assert wrap_calls == [3]
+    assert "2026-01-08: 40.0" in result
+    assert "2026-01-10: 42.0" in result
+
+
+@pytest.mark.unit
+def test_get_global_news_uses_vnstock_news_when_available(monkeypatch):
+    class FakeCrawler:
+        seen_sites = []
+
+        def __init__(self, site_name=None, site=None, source=None):
+            selected_site = site_name or site or source
+            FakeCrawler.seen_sites.append(selected_site)
+
+        def get_articles(self, limit=10):
+            assert limit == 1
+            return [
+                {
+                    "title": "Vietnam market rally extends gains",
+                    "publish_time": "2026-01-09",
+                    "url": "https://example.com/rally",
+                },
+                {
+                    "title": "Older article",
+                    "publish_time": "2025-12-20",
+                    "url": "https://example.com/old",
+                },
+            ]
+
+    fake_news_module = _fake_module(
+        list_supported_sites=lambda: ["cafef", "vietstock"],
+        Crawler=FakeCrawler,
+    )
+
+    monkeypatch.setattr(
+        vnstock,
+        "_load_vnstock",
+        lambda: (_ for _ in ()).throw(AssertionError("base vnstock should not import for vnstock_news-backed global news")),
+    )
+    monkeypatch.setattr(
+        vnstock,
+        "_optional_import",
+        lambda module_name: fake_news_module if module_name == "vnstock_news" else None,
+    )
+
+    result = vnstock.get_global_news("2026-01-10", look_back_days=7, limit=1)
+
+    assert FakeCrawler.seen_sites == ["cafef"]
+    assert "Vietnam market rally extends gains" in result
+    assert "Older article" not in result
+
+
+@pytest.mark.unit
+def test_pipeline_not_used_by_current_request_handlers(monkeypatch):
+    imported_modules = []
+
+    class SponsorQuote:
+        def __init__(self, symbol, source=None):
+            self.symbol = symbol
+
+        def history(self, start, end, interval="1D"):
+            return pd.DataFrame({
+                "time": ["2026-01-02"],
+                "open": [100000],
+                "high": [101000],
+                "low": [99500],
+                "close": [100500],
+                "volume": [1200],
+            })
+
+    def optional_import(module_name):
+        imported_modules.append(module_name)
+        if module_name == "vnstock_data":
+            return _fake_module(Quote=SponsorQuote)
+        return None
+
+    monkeypatch.setattr(vnstock, "_load_vnstock", lambda: _fake_module())
+    monkeypatch.setattr(vnstock, "_optional_import", optional_import)
+
+    result = vnstock.get_stock("FPT", "2026-01-01", "2026-01-31")
+
+    assert "2026-01-02,100000,101000,99500,100500,1200" in result
+    assert "vnstock_pipeline" not in imported_modules
