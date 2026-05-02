@@ -1,3 +1,5 @@
+import json
+import logging
 import os
 from typing import Any, Optional
 
@@ -5,6 +7,9 @@ from langchain_openai import ChatOpenAI
 
 from .base_client import BaseLLMClient, normalize_content
 from .validators import validate_model
+
+
+logger = logging.getLogger(__name__)
 
 
 class NormalizedChatOpenAI(ChatOpenAI):
@@ -15,8 +20,36 @@ class NormalizedChatOpenAI(ChatOpenAI):
     downstream handling.
     """
 
+    def _model_label(self) -> str:
+        return str(getattr(self, "model_name", None) or getattr(self, "model", None) or "unknown")
+
+    def _endpoint_label(self) -> str:
+        return str(
+            getattr(self, "openai_api_base", None)
+            or getattr(self, "base_url", None)
+            or "default OpenAI endpoint"
+        )
+
     def invoke(self, input, config=None, **kwargs):
-        return normalize_content(super().invoke(input, config, **kwargs))
+        for attempt in range(2):
+            try:
+                return normalize_content(super().invoke(input, config, **kwargs))
+            except json.JSONDecodeError as error:
+                if attempt == 0:
+                    logger.warning(
+                        "Retrying model '%s' after malformed JSON response from %s: %s",
+                        self._model_label(),
+                        self._endpoint_label(),
+                        error,
+                    )
+                    continue
+
+                raise RuntimeError(
+                    "LLM provider returned malformed JSON while invoking "
+                    f"model '{self._model_label()}' via '{self._endpoint_label()}'. "
+                    "This usually means the provider returned an empty or truncated "
+                    f"response body. Original error: {error}"
+                ) from error
 
     def with_structured_output(self, schema, *, method=None, **kwargs):
         """Wrap with structured output, defaulting to function_calling for OpenAI.

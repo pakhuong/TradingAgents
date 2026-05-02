@@ -1,5 +1,6 @@
 import os
 import re
+from importlib import import_module
 from datetime import datetime
 from typing import Any, Annotated, Callable
 
@@ -81,6 +82,30 @@ INDICATOR_DESCRIPTIONS = {
         "Usage: Identify overbought (>80) or oversold (<20) conditions and confirm the strength of trends or reversals. "
         "Tips: Use alongside RSI or MACD to confirm signals; divergence between price and MFI can indicate potential reversals."
     ),
+}
+
+SPONSOR_TA_MAPPING = {
+    "close_50_sma": {"method": "sma", "kwargs": {"length": 50}},
+    "close_200_sma": {"method": "sma", "kwargs": {"length": 200}},
+    "close_10_ema": {"method": "ema", "kwargs": {"length": 10}},
+    "macd": {"method": "macd", "kwargs": {"fast": 12, "slow": 26, "signal": 9}},
+    "macds": {"method": "macd", "kwargs": {"fast": 12, "slow": 26, "signal": 9}},
+    "macdh": {"method": "macd", "kwargs": {"fast": 12, "slow": 26, "signal": 9}},
+    "rsi": {"method": "rsi", "kwargs": {"length": 14}},
+    "boll": {"method": "bbands", "kwargs": {"length": 20, "std": 2}},
+    "boll_ub": {"method": "bbands", "kwargs": {"length": 20, "std": 2}},
+    "boll_lb": {"method": "bbands", "kwargs": {"length": 20, "std": 2}},
+    "atr": {"method": "atr", "kwargs": {"length": 14}},
+    "vwma": {"method": "vwma", "kwargs": {"length": 20}},
+    "mfi": {"method": "mfi", "kwargs": {"length": 14}},
+}
+
+SPONSOR_TA_COLUMN_TOKENS = {
+    "macds": ["signal", "macds"],
+    "macdh": ["hist", "macdh"],
+    "boll": ["middle", "mid", "basis", "bbm"],
+    "boll_ub": ["upper", "bbu", "boll_ub"],
+    "boll_lb": ["lower", "bbl", "boll_lb"],
 }
 
 
@@ -174,6 +199,36 @@ def _normalize_vietnam_symbol(symbol: str) -> str:
     return normalized
 
 
+def _optional_import(module_name: str):
+    try:
+        return import_module(module_name)
+    except ImportError:
+        return None
+
+
+def _load_vnstock_capabilities(
+    base_module=None,
+    include_base: bool = False,
+    include_pipeline: bool = False,
+) -> dict[str, Any]:
+    if base_module is None and include_base:
+        base_module = _load_vnstock()
+
+    return {
+        "base": base_module,
+        "data": _optional_import("vnstock_data"),
+        "ta": _optional_import("vnstock_ta"),
+        "news": _optional_import("vnstock_news"),
+        "pipeline": _optional_import("vnstock_pipeline") if include_pipeline else None,
+    }
+
+
+def _resolve_module_attr(module, attr_name: str):
+    if module is None:
+        return None
+    return getattr(module, attr_name, None)
+
+
 def _call_with_fallbacks(func: Callable[..., Any], kwargs_options: list[dict[str, Any]]) -> Any:
     last_error = None
     for kwargs in kwargs_options:
@@ -186,36 +241,82 @@ def _call_with_fallbacks(func: Callable[..., Any], kwargs_options: list[dict[str
     return func()
 
 
-def _make_quote(vnstock_module, symbol: str):
+def _construct_with_sources(factory: Callable[..., Any], symbol: str) -> Any:
+    return _call_with_fallbacks(
+        factory,
+        [
+            {"symbol": symbol, "source": "VCI"},
+            {"symbol": symbol, "source": "KBS"},
+            {"symbol": symbol},
+        ],
+    )
+
+
+def _ensure_base_vnstock(capabilities: dict[str, Any]):
+    base_module = capabilities.get("base")
+    if base_module is not None:
+        return base_module
+    return _load_vnstock()
+
+
+def _make_base_quote(vnstock_module, symbol: str):
     quote_cls = getattr(vnstock_module, "Quote", None)
     if quote_cls is not None:
-        return _call_with_fallbacks(
-            quote_cls,
-            [
-                {"symbol": symbol, "source": "VCI"},
-                {"symbol": symbol, "source": "KBS"},
-                {"symbol": symbol},
-            ],
-        )
+        return _construct_with_sources(quote_cls, symbol)
 
     vnstock_cls = getattr(vnstock_module, "Vnstock", None)
     if vnstock_cls is not None:
         client = vnstock_cls()
         stock_func = getattr(client, "stock", None)
         if callable(stock_func):
-            stock = _call_with_fallbacks(
-                stock_func,
-                [
-                    {"symbol": symbol, "source": "VCI"},
-                    {"symbol": symbol, "source": "KBS"},
-                    {"symbol": symbol},
-                ],
-            )
+            stock = _construct_with_sources(stock_func, symbol)
             quote = getattr(stock, "quote", None)
             if quote is not None:
                 return quote
 
     raise DataVendorUnavailableError("vnstock quote API is not available in this environment.")
+
+
+def _make_base_finance(vnstock_module, symbol: str):
+    finance_cls = getattr(vnstock_module, "Finance", None)
+    if finance_cls is not None:
+        return _construct_with_sources(finance_cls, symbol)
+
+    vnstock_cls = getattr(vnstock_module, "Vnstock", None)
+    if vnstock_cls is not None:
+        client = vnstock_cls()
+        stock_func = getattr(client, "stock", None)
+        if callable(stock_func):
+            stock = _construct_with_sources(stock_func, symbol)
+            finance = getattr(stock, "finance", None)
+            if finance is not None:
+                return finance
+
+    raise DataVendorUnavailableError("vnstock finance API is not available in this environment.")
+
+
+def _make_base_company(vnstock_module, symbol: str):
+    company_cls = getattr(vnstock_module, "Company", None)
+    if company_cls is not None:
+        return _construct_with_sources(company_cls, symbol)
+
+    vnstock_cls = getattr(vnstock_module, "Vnstock", None)
+    if vnstock_cls is None:
+        return None
+    client = vnstock_cls()
+    stock_func = getattr(client, "stock", None)
+    if not callable(stock_func):
+        return None
+    stock = _construct_with_sources(stock_func, symbol)
+    return getattr(stock, "company", None)
+
+
+def _make_quote(vnstock_module, symbol: str):
+    capabilities = _load_vnstock_capabilities(vnstock_module)
+    sponsor_quote_cls = _resolve_module_attr(capabilities["data"], "Quote")
+    if sponsor_quote_cls is not None:
+        return _construct_with_sources(sponsor_quote_cls, symbol)
+    return _make_base_quote(_ensure_base_vnstock(capabilities), symbol)
 
 
 def _quote_history(quote, symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -317,10 +418,86 @@ def _format_csv_report(title: str, data: pd.DataFrame, currency: str = "VND") ->
 
 def _fetch_ohlcv(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
     provider_symbol = _normalize_vietnam_symbol(symbol)
-    vnstock_module = _load_vnstock()
-    quote = _make_quote(vnstock_module, provider_symbol)
+    quote = _make_quote(None, provider_symbol)
     raw_data = _quote_history(quote, provider_symbol, start_date, end_date)
     return _filter_ohlcv_range(_normalize_ohlcv(raw_data), start_date, end_date)
+
+
+def _build_sponsor_ta_indicator(indicator_cls, data: pd.DataFrame):
+    for args, kwargs in (
+        ((data.copy(),), {}),
+        ((), {"data": data.copy()}),
+        ((), {"df": data.copy()}),
+    ):
+        try:
+            return indicator_cls(*args, **kwargs)
+        except TypeError:
+            continue
+        except Exception:
+            return None
+    return None
+
+
+def _extract_sponsor_indicator_series(result: Any, indicator: str) -> pd.Series | None:
+    if isinstance(result, pd.Series):
+        return result.reset_index(drop=True)
+
+    if isinstance(result, dict):
+        result = pd.DataFrame(result)
+
+    if not isinstance(result, pd.DataFrame):
+        return None
+
+    if result.empty:
+        return None
+
+    lowered_columns = {str(column).lower(): column for column in result.columns}
+    exact_match = lowered_columns.get(indicator)
+    if exact_match is not None:
+        return result[exact_match].reset_index(drop=True)
+
+    for token in SPONSOR_TA_COLUMN_TOKENS.get(indicator, []):
+        matches = [column for column in result.columns if token in str(column).lower()]
+        if len(matches) == 1:
+            return result[matches[0]].reset_index(drop=True)
+
+    if len(result.columns) == 1:
+        return result.iloc[:, 0].reset_index(drop=True)
+
+    return None
+
+
+def _compute_indicator_with_sponsor_ta(data: pd.DataFrame, indicator: str) -> pd.DataFrame | None:
+    mapping = SPONSOR_TA_MAPPING.get(indicator)
+    ta_module = _load_vnstock_capabilities()["ta"]
+    if mapping is None or ta_module is None:
+        return None
+
+    indicator_cls = _resolve_module_attr(ta_module, "Indicator")
+    if indicator_cls is None:
+        return None
+
+    ta_indicator = _build_sponsor_ta_indicator(indicator_cls, data)
+    if ta_indicator is None:
+        return None
+
+    method = getattr(ta_indicator, mapping["method"], None)
+    if not callable(method):
+        return None
+
+    try:
+        result = method(**mapping["kwargs"])
+    except Exception:
+        return None
+
+    series = _extract_sponsor_indicator_series(result, indicator)
+    if series is None or len(series) != len(data):
+        return None
+
+    return pd.DataFrame({
+        "Date": pd.to_datetime(data["Date"], errors="coerce").dt.strftime("%Y-%m-%d"),
+        indicator: series,
+    })
 
 
 def get_stock(
@@ -364,10 +541,12 @@ def get_indicator(
 
     indicator_rows = pd.DataFrame(columns=["Date", indicator])
     if not data.empty:
-        stats_df = wrap(data.copy())
-        stats_df["Date"] = pd.to_datetime(stats_df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
-        stats_df[indicator]
-        indicator_rows = stats_df[["Date", indicator]].copy()
+        indicator_rows = _compute_indicator_with_sponsor_ta(data, indicator)
+        if indicator_rows is None:
+            stats_df = wrap(data.copy())
+            stats_df["Date"] = pd.to_datetime(stats_df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
+            stats_df[indicator]
+            indicator_rows = stats_df[["Date", indicator]].copy()
         indicator_rows = indicator_rows.dropna(subset=["Date"])
         indicator_rows = indicator_rows[indicator_rows["Date"] <= curr_date].reset_index(drop=True)
 
@@ -401,35 +580,11 @@ def get_indicator(
 
 
 def _make_finance(vnstock_module, symbol: str):
-    finance_cls = getattr(vnstock_module, "Finance", None)
-    if finance_cls is not None:
-        return _call_with_fallbacks(
-            finance_cls,
-            [
-                {"symbol": symbol, "source": "VCI"},
-                {"symbol": symbol, "source": "KBS"},
-                {"symbol": symbol},
-            ],
-        )
-
-    vnstock_cls = getattr(vnstock_module, "Vnstock", None)
-    if vnstock_cls is not None:
-        client = vnstock_cls()
-        stock_func = getattr(client, "stock", None)
-        if callable(stock_func):
-            stock = _call_with_fallbacks(
-                stock_func,
-                [
-                    {"symbol": symbol, "source": "VCI"},
-                    {"symbol": symbol, "source": "KBS"},
-                    {"symbol": symbol},
-                ],
-            )
-            finance = getattr(stock, "finance", None)
-            if finance is not None:
-                return finance
-
-    raise DataVendorUnavailableError("vnstock finance API is not available in this environment.")
+    capabilities = _load_vnstock_capabilities(vnstock_module)
+    sponsor_finance_cls = _resolve_module_attr(capabilities["data"], "Finance")
+    if sponsor_finance_cls is not None:
+        return _construct_with_sources(sponsor_finance_cls, symbol)
+    return _make_base_finance(_ensure_base_vnstock(capabilities), symbol)
 
 
 def _period_from_freq(freq: str) -> str:
@@ -491,7 +646,7 @@ def _filter_financials_by_curr_date(data: pd.DataFrame, curr_date: str | None) -
 
 def _call_finance_table(symbol: str, method_name: str, freq: str, curr_date: str | None) -> pd.DataFrame:
     provider_symbol = _normalize_vietnam_symbol(symbol)
-    finance = _make_finance(_load_vnstock(), provider_symbol)
+    finance = _make_finance(None, provider_symbol)
     method = getattr(finance, method_name, None)
     if not callable(method):
         raise DataVendorUnavailableError(f"vnstock finance method '{method_name}' is not available.")
@@ -517,38 +672,16 @@ def _format_table_report(title: str, data: pd.DataFrame) -> str:
 
 
 def _make_company(vnstock_module, symbol: str):
-    company_cls = getattr(vnstock_module, "Company", None)
-    if company_cls is not None:
-        return _call_with_fallbacks(
-            company_cls,
-            [
-                {"symbol": symbol, "source": "VCI"},
-                {"symbol": symbol, "source": "KBS"},
-                {"symbol": symbol},
-            ],
-        )
-
-    vnstock_cls = getattr(vnstock_module, "Vnstock", None)
-    if vnstock_cls is None:
-        return None
-    client = vnstock_cls()
-    stock_func = getattr(client, "stock", None)
-    if not callable(stock_func):
-        return None
-    stock = _call_with_fallbacks(
-        stock_func,
-        [
-            {"symbol": symbol, "source": "VCI"},
-            {"symbol": symbol, "source": "KBS"},
-            {"symbol": symbol},
-        ],
-    )
-    return getattr(stock, "company", None)
+    capabilities = _load_vnstock_capabilities(vnstock_module)
+    sponsor_company_cls = _resolve_module_attr(capabilities["data"], "Company")
+    if sponsor_company_cls is not None:
+        return _construct_with_sources(sponsor_company_cls, symbol)
+    return _make_base_company(_ensure_base_vnstock(capabilities), symbol)
 
 
 def _call_company_table(symbol: str, method_name: str) -> pd.DataFrame:
     provider_symbol = _normalize_vietnam_symbol(symbol)
-    company = _make_company(_load_vnstock(), provider_symbol)
+    company = _make_company(None, provider_symbol)
     method = getattr(company, method_name, None) if company is not None else None
     if not callable(method):
         return pd.DataFrame()
@@ -636,6 +769,134 @@ def _filter_news_by_date(data: pd.DataFrame, start_date: str, end_date: str) -> 
     return data
 
 
+def _coerce_news_records(records: Any, site_name: str | None = None) -> pd.DataFrame:
+    if isinstance(records, pd.DataFrame):
+        frame = records.copy()
+    elif isinstance(records, list):
+        frame = pd.DataFrame(records)
+    elif isinstance(records, dict):
+        frame = pd.DataFrame([records])
+    else:
+        return pd.DataFrame()
+
+    if site_name and not frame.empty and "site" not in frame.columns:
+        frame["site"] = site_name
+    return frame
+
+
+def _sort_news_by_date(data: pd.DataFrame) -> pd.DataFrame:
+    if data.empty:
+        return data
+
+    date_column_names = {"date", "time", "pub_date", "publish_date", "published", "created_at", "publish_time"}
+    for column in data.columns:
+        key = str(column).strip().lower().replace(" ", "_")
+        if key not in date_column_names:
+            continue
+        parsed_values = data[column].map(_parse_date_like)
+        if parsed_values.notna().any():
+            return (
+                data.assign(_sort_date=parsed_values)
+                .sort_values("_sort_date", ascending=False)
+                .drop(columns=["_sort_date"])
+                .reset_index(drop=True)
+            )
+    return data.reset_index(drop=True)
+
+
+def _list_supported_news_sites(news_module) -> list[str]:
+    list_supported_sites = _resolve_module_attr(news_module, "list_supported_sites")
+    supported_sites = []
+    if callable(list_supported_sites):
+        try:
+            supported_sites = list_supported_sites()
+        except Exception:
+            supported_sites = []
+    elif isinstance(getattr(news_module, "SUPPORTED_SITES", None), (list, tuple, set, dict)):
+        supported_sites = getattr(news_module, "SUPPORTED_SITES")
+
+    if isinstance(supported_sites, dict):
+        supported_sites = list(supported_sites.values())
+
+    site_names = []
+    for site in supported_sites or []:
+        if isinstance(site, str):
+            site_names.append(site)
+            continue
+        if isinstance(site, dict):
+            name = site.get("site_name") or site.get("name") or site.get("site")
+            if name:
+                site_names.append(str(name))
+    return site_names
+
+
+def _resolve_news_crawler_cls(news_module):
+    crawler_cls = _resolve_module_attr(news_module, "Crawler")
+    if crawler_cls is not None:
+        return crawler_cls
+
+    for module_name in ("vnstock_news.crawler", "vnstock_news.core.crawler"):
+        crawler_module = _optional_import(module_name)
+        crawler_cls = _resolve_module_attr(crawler_module, "Crawler")
+        if crawler_cls is not None:
+            return crawler_cls
+
+    return None
+
+
+def _fetch_global_news_with_sponsor(curr_date: str, look_back_days: int, limit: int) -> pd.DataFrame:
+    news_module = _load_vnstock_capabilities()["news"]
+    if news_module is None:
+        return pd.DataFrame()
+
+    crawler_cls = _resolve_news_crawler_cls(news_module)
+    site_names = _list_supported_news_sites(news_module)
+    if crawler_cls is None or not site_names:
+        return pd.DataFrame()
+
+    start_date = (pd.Timestamp(curr_date) - pd.Timedelta(days=look_back_days)).strftime("%Y-%m-%d")
+    article_frames = []
+    for site_name in site_names:
+        try:
+            crawler = _call_with_fallbacks(
+                crawler_cls,
+                [
+                    {"site_name": site_name},
+                    {"site": site_name},
+                    {"source": site_name},
+                    {},
+                ],
+            )
+        except Exception:
+            continue
+
+        get_articles = getattr(crawler, "get_articles", None)
+        if not callable(get_articles):
+            continue
+
+        try:
+            records = _call_with_fallbacks(get_articles, [{"limit": max(limit, 1)}, {}])
+        except Exception:
+            continue
+
+        frame = _coerce_news_records(records, site_name)
+        if frame.empty:
+            continue
+
+        article_frames.append(frame)
+        filtered = _filter_news_by_date(pd.concat(article_frames, ignore_index=True), start_date, curr_date)
+        if len(filtered) >= limit:
+            break
+
+    if not article_frames:
+        return pd.DataFrame()
+
+    data = _filter_news_by_date(pd.concat(article_frames, ignore_index=True), start_date, curr_date)
+    if data.empty:
+        return data
+    return _sort_news_by_date(data).head(max(limit, 1)).reset_index(drop=True)
+
+
 def get_news(
     ticker: Annotated[str, "Ticker symbol"],
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
@@ -654,9 +915,17 @@ def get_global_news(
     look_back_days: Annotated[int, "Number of days to look back"] = 7,
     limit: Annotated[int, "Maximum number of articles to return"] = 10,
 ) -> str:
-    return (
-        "vnstock does not provide Vietnam macro news data through the configured adapter "
-        f"for {curr_date} with a {look_back_days}-day lookback."
+    datetime.strptime(curr_date, "%Y-%m-%d")
+
+    news = _fetch_global_news_with_sponsor(curr_date, look_back_days, limit)
+    if news.empty:
+        return (
+            "vnstock does not provide Vietnam macro news data through the configured adapter "
+            f"for {curr_date} with a {look_back_days}-day lookback."
+        )
+    return _format_table_report(
+        f"Vietnam Global News up to {curr_date} ({look_back_days}-day lookback)",
+        news,
     )
 
 
