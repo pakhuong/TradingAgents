@@ -22,13 +22,17 @@ _API_KEY_ENV_VARS = (
     "OPENROUTER_API_KEY",
     "AZURE_OPENAI_API_KEY",
     "ALPHA_VANTAGE_API_KEY",
+    "VNSTOCK_API_KEY",
 )
+
+_EMPTY_DEFAULT_ENV_VARS = {"VNSTOCK_API_KEY"}
 
 
 @pytest.fixture(autouse=True)
 def _dummy_api_keys(monkeypatch):
     for env_var in _API_KEY_ENV_VARS:
-        monkeypatch.setenv(env_var, os.environ.get(env_var, "placeholder"))
+        default_value = "" if env_var in _EMPTY_DEFAULT_ENV_VARS else "placeholder"
+        monkeypatch.setenv(env_var, os.environ.get(env_var, default_value))
 
 
 @pytest.fixture()

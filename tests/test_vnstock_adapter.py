@@ -1,3 +1,4 @@
+import sys
 import types
 
 import pandas as pd
@@ -56,6 +57,57 @@ def test_get_stock_formats_canonical_ohlcv(monkeypatch):
     assert "2026-01-02,100000,101000,99500,100500,1200" in result
     assert "2025-12-31" not in result
     assert "2026-02-01" not in result
+
+
+@pytest.mark.unit
+def test_load_vnstock_registers_api_key_once(monkeypatch):
+    calls = []
+    fake_vnstock_module = _fake_module(register_user=lambda api_key=None: calls.append(api_key))
+
+    monkeypatch.setenv("VNSTOCK_API_KEY", "vnstock_test_key")
+    monkeypatch.setattr(vnstock, "_VNSTOCK_AUTH_INITIALIZED", False)
+    monkeypatch.setitem(sys.modules, "vnstock", fake_vnstock_module)
+
+    loaded_module = vnstock._load_vnstock()
+    loaded_module_again = vnstock._load_vnstock()
+
+    assert loaded_module is fake_vnstock_module
+    assert loaded_module_again is fake_vnstock_module
+    assert calls == ["vnstock_test_key"]
+    assert vnstock._VNSTOCK_AUTH_INITIALIZED is True
+
+
+@pytest.mark.unit
+def test_load_vnstock_skips_registration_when_api_key_absent(monkeypatch):
+    calls = []
+    fake_vnstock_module = _fake_module(register_user=lambda api_key=None: calls.append(api_key))
+
+    monkeypatch.delenv("VNSTOCK_API_KEY", raising=False)
+    monkeypatch.setattr(vnstock, "_VNSTOCK_AUTH_INITIALIZED", False)
+    monkeypatch.setitem(sys.modules, "vnstock", fake_vnstock_module)
+
+    loaded_module = vnstock._load_vnstock()
+
+    assert loaded_module is fake_vnstock_module
+    assert calls == []
+    assert vnstock._VNSTOCK_AUTH_INITIALIZED is False
+
+
+@pytest.mark.unit
+def test_load_vnstock_raises_clear_error_when_registration_fails(monkeypatch):
+    def failing_register_user(api_key=None):
+        raise ValueError(f"bad key: {api_key}")
+
+    fake_vnstock_module = _fake_module(register_user=failing_register_user)
+
+    monkeypatch.setenv("VNSTOCK_API_KEY", "vnstock_bad_key")
+    monkeypatch.setattr(vnstock, "_VNSTOCK_AUTH_INITIALIZED", False)
+    monkeypatch.setitem(sys.modules, "vnstock", fake_vnstock_module)
+
+    with pytest.raises(RuntimeError, match="VNSTOCK_API_KEY is set but vnstock auth initialization failed"):
+        vnstock._load_vnstock()
+
+    assert vnstock._VNSTOCK_AUTH_INITIALIZED is False
 
 
 @pytest.mark.unit
