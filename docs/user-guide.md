@@ -90,6 +90,7 @@ DEEPSEEK_API_KEY=
 DASHSCOPE_API_KEY=
 ZHIPU_API_KEY=
 OPENROUTER_API_KEY=
+VNSTOCK_API_KEY=
 ```
 
 If you use Azure OpenAI, also create the enterprise config file:
@@ -110,6 +111,7 @@ Notes:
 
 - You only need to populate the provider you intend to use.
 - `ALPHA_VANTAGE_API_KEY` is optional and only needed if you switch data vendors to Alpha Vantage.
+- `VNSTOCK_API_KEY` is optional and only needed if you want TradingAgents to auto-register vnstock for higher vnstock usage limits. Leave it unset to use vnstock guest mode.
 - Ollama does not require a cloud API key, but it does require a reachable local Ollama server and an installed local model.
 
 ## Run Your First Analysis

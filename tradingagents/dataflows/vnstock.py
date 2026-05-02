@@ -1,3 +1,4 @@
+import os
 import re
 from datetime import datetime
 from typing import Any, Annotated, Callable
@@ -12,6 +13,7 @@ from .errors import DataVendorUnavailableError
 OHLCV_COLUMNS = ["Date", "Open", "High", "Low", "Close", "Volume"]
 VIETNAM_EXCHANGE_PREFIXES = {"HOSE", "HSX", "HNX", "UPCOM"}
 VIETNAM_SUFFIXES = (".HM", ".HN", ".UPCOM")
+_VNSTOCK_AUTH_INITIALIZED = False
 
 INDICATOR_DESCRIPTIONS = {
     "close_50_sma": (
@@ -90,7 +92,70 @@ def _load_vnstock():
         raise DataVendorUnavailableError(
             "vnstock is not installed. Install vnstock or configure another data vendor."
         ) from exc
+    _initialize_vnstock_auth(vnstock_module)
     return vnstock_module
+
+
+def _resolve_vnstock_register_user(vnstock_module) -> Callable[..., Any] | None:
+    register_user = getattr(vnstock_module, "register_user", None)
+    if callable(register_user):
+        return register_user
+
+    core_module = getattr(vnstock_module, "core", None)
+    utils_module = getattr(core_module, "utils", None) if core_module is not None else None
+    auth_module = getattr(utils_module, "auth", None) if utils_module is not None else None
+    register_user = getattr(auth_module, "register_user", None) if auth_module is not None else None
+    if callable(register_user):
+        return register_user
+
+    try:
+        from vnstock.core.utils.auth import register_user as register_user_func
+    except ImportError:
+        return None
+    return register_user_func
+
+
+def _call_register_user(register_user: Callable[..., Any], api_key: str) -> Any:
+    last_error = None
+    for args, kwargs in (((), {"api_key": api_key}), ((api_key,), {})):
+        try:
+            return register_user(*args, **kwargs)
+        except TypeError as exc:
+            last_error = exc
+    if last_error is not None:
+        raise last_error
+    return register_user()
+
+
+def _initialize_vnstock_auth(vnstock_module) -> None:
+    global _VNSTOCK_AUTH_INITIALIZED
+
+    if _VNSTOCK_AUTH_INITIALIZED:
+        return
+
+    api_key = os.getenv("VNSTOCK_API_KEY", "").strip()
+    if not api_key:
+        return
+
+    register_user = _resolve_vnstock_register_user(vnstock_module)
+    if register_user is None:
+        raise RuntimeError(
+            "VNSTOCK_API_KEY is set but the installed vnstock package does not expose register_user()."
+        )
+
+    try:
+        result = _call_register_user(register_user, api_key)
+    except Exception as exc:
+        raise RuntimeError(
+            "VNSTOCK_API_KEY is set but vnstock auth initialization failed."
+        ) from exc
+
+    if result is False:
+        raise RuntimeError(
+            "VNSTOCK_API_KEY is set but vnstock rejected the configured API key."
+        )
+
+    _VNSTOCK_AUTH_INITIALIZED = True
 
 
 def _normalize_vietnam_symbol(symbol: str) -> str:
