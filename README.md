@@ -146,7 +146,7 @@ docker compose --profile ollama run --rm tradingagents-ollama
 
 ### Required APIs
 
-TradingAgents supports multiple LLM providers. Set the API key for your chosen provider:
+TradingAgents supports multiple LLM providers and optional data-vendor credentials. Set only the keys you plan to use:
 
 ```bash
 export OPENAI_API_KEY=...          # OpenAI (GPT)
@@ -162,6 +162,7 @@ export MINIMAX_API_KEY=...         # MiniMax — Global (api.minimax.io, M2.x, 2
 export MINIMAX_CN_API_KEY=...      # MiniMax — China (api.minimaxi.com, M2.x, 204K ctx)
 export OPENROUTER_API_KEY=...      # OpenRouter
 export ALPHA_VANTAGE_API_KEY=...   # Alpha Vantage
+export VNSTOCK_API_KEY=...         # vnstock optional auth (higher limits)
 ```
 
 For enterprise providers (e.g. Azure OpenAI, AWS Bedrock), copy `.env.enterprise.example` to `.env.enterprise` and fill in your credentials.
@@ -249,6 +250,8 @@ uv sync --extra vietnam
 # or
 pip install ".[vietnam]"
 ```
+
+If you have a vnstock API key, set `VNSTOCK_API_KEY` in your shell or `.env`. TradingAgents will register it automatically when the vnstock adapter initializes. Leave it unset to use vnstock guest mode.
 
 The interactive CLI automatically switches explicit Vietnam symbols such as `HOSE:FPT`, `HNX:SHS`, `VIC.HM`, `VNINDEX`, and `VN30` to the Vietnam data profile. If `vnstock` is not installed, the CLI stops before running the LLM agents and prints the install command instead of producing an empty-data report.
 

@@ -1,8 +1,8 @@
 ---
 title: Vietnam Equity Market Data Support With vnstock
-version: 1.2
+version: 1.3
 date_created: 2026-04-30
-last_updated: 2026-05-01
+last_updated: 2026-05-02
 owner: TradingAgents maintainers
 tags: [data, vietnam, vnstock, market-support, vendor-adapter]
 ---
@@ -19,6 +19,7 @@ The scope includes:
 
 - Adding a `vnstock` data vendor adapter under `tradingagents/dataflows/`.
 - Routing Vietnam-capable stock, technical indicator, fundamental, news, and insider-transaction methods through `tradingagents/dataflows/interface.py`.
+- Optionally auto-registering `vnstock` authentication from `VNSTOCK_API_KEY` when that environment variable is present, while preserving guest-mode behavior when it is absent.
 - Adding market profile configuration for Vietnam, including native currency and benchmark index.
 - Automatically applying the Vietnam market profile for explicit Vietnam symbols before graph data fetches, including memory-log outcome resolution.
 - Preventing explicit Vietnam symbols from leaking to yfinance or Alpha Vantage fallback paths that are known to produce invalid-symbol errors for forms such as `HOSE:VIC`.
@@ -47,6 +48,7 @@ The scope excludes:
 - **VNINDEX**: Vietnam Ho Chi Minh Stock Index, used as the default Vietnam market benchmark in this specification.
 - **OHLCV**: Open, high, low, close, and volume price data.
 - **VND**: Vietnamese dong, the native currency for Vietnam equity prices.
+- **VNSTOCK_API_KEY**: An optional environment variable containing a vnstock user API key. When present, the adapter may register it automatically to unlock higher vnstock usage limits. When absent, vnstock guest-mode access remains valid.
 - **Provider symbol**: The exact symbol format expected by a data provider. For `vnstock`, common Vietnam equity symbols are unqualified uppercase local codes such as `FPT`, `VNM`, and `TCB`.
 - **Explicit Vietnam symbol**: A user-facing ticker that unambiguously identifies the Vietnam market without external context. Explicit forms include `HOSE:<symbol>`, `HSX:<symbol>`, `HNX:<symbol>`, `UPCOM:<symbol>`, `.HM`, `.HN`, `.UPCOM`, `VNINDEX`, and `VN30`. Plain local codes such as `FPT` and `VIC` are valid Vietnam symbols but are not explicit because they may be ambiguous without user configuration.
 - **Insider transaction data**: Issuer disclosures describing purchases, sales, registrations, or ownership changes by insiders, executives, major shareholders, or related internal stakeholders.
@@ -84,6 +86,9 @@ The scope excludes:
 - **REQ-018**: The vendor router shall force ticker-scoped requests for explicit Vietnam symbols to `vnstock` when a `vnstock` implementation exists, even when the current vendor configuration starts with yfinance or Alpha Vantage.
 - **REQ-019**: The `vnstock` adapter shall wire `get_insider_transactions(ticker)` to a supported `vnstock` insider transaction capability, such as `company.insider_trading()` or an equivalent current public API in the installed `vnstock` version.
 - **REQ-020**: If the installed `vnstock` version does not expose insider transaction retrieval or returns no insider rows for the requested ticker, the adapter shall return a clear unavailable-or-no-data message instead of allowing explicit Vietnam symbols to fall through to yfinance.
+- **REQ-021**: The `vnstock` adapter shall automatically register `VNSTOCK_API_KEY` when that environment variable is present before constructing provider clients that depend on vnstock session state.
+- **REQ-022**: The `vnstock` adapter shall treat `VNSTOCK_API_KEY` as optional. When the environment variable is absent, the adapter shall continue to use vnstock guest-mode behavior instead of failing the request.
+- **REQ-023**: When `VNSTOCK_API_KEY` is present but vnstock registration fails or the installed vnstock version does not expose the expected auth entrypoint, the adapter shall raise a clear adapter-level error instead of silently ignoring the configured key.
 
 ### Compatibility Requirements
 
@@ -101,6 +106,7 @@ The scope excludes:
 - **CON-005**: Preserve explicit `encoding="utf-8"` for file I/O.
 - **CON-006**: Prefer lazy imports for `vnstock` so test collection works even when the optional provider is not installed, unless the package is made a mandatory dependency.
 - **CON-007**: Do not add paid provider calls or live credentials to examples.
+- **CON-008**: Do not make `VNSTOCK_API_KEY` mandatory for default tests, default documentation examples, or guest-mode vnstock usage.
 
 ### Guidelines
 
@@ -110,6 +116,7 @@ The scope excludes:
 - **GUD-004**: When `vnstock` lacks a dataset, return a clear Markdown message rather than crashing, unless the error indicates a coding defect.
 - **GUD-005**: Treat `vnstock` as a research data source. Documentation must preserve the project disclaimer that this is not financial advice.
 - **GUD-006**: Add FiinQuant or SSI FastConnect only in future work. The first implementation shall be `vnstock` only.
+- **GUD-007**: Keep vnstock authentication handling localized to the adapter import or initialization path rather than threading auth state through unrelated config, graph, or agent layers.
 
 ## 4. Interfaces & Data Contracts
 
@@ -224,6 +231,10 @@ def _load_vnstock():
     """Import vnstock lazily and raise DataVendorUnavailableError if unavailable."""
 
 
+def _initialize_vnstock_auth(vnstock_module):
+    """Register VNSTOCK_API_KEY when present and otherwise preserve guest mode."""
+
+
 def _normalize_vietnam_symbol(symbol: str) -> str:
     """Map user/provider variants to vnstock local symbols."""
 
@@ -235,6 +246,20 @@ def _normalize_ohlcv(data: pandas.DataFrame) -> pandas.DataFrame:
 def _format_csv_report(title: str, data: pandas.DataFrame) -> str:
     """Return Markdown title plus CSV content."""
 ```
+
+The adapter shall read `VNSTOCK_API_KEY` from the process environment inside the lazy vnstock import path or an immediately-adjacent helper. Application entrypoints already load `.env` files into the process environment, so the adapter shall not add a separate config flag or duplicate dotenv loading.
+
+If `VNSTOCK_API_KEY` is unset, `_initialize_vnstock_auth` shall perform a no-op and allow guest-mode vnstock usage.
+
+If `VNSTOCK_API_KEY` is set, the adapter shall attempt vnstock registration exactly once per process using the current public auth entrypoint for the installed vnstock version. Known public usage patterns include:
+
+```python
+from vnstock import register_user
+
+register_user(api_key="vnstock_RANDOM_KEY")
+```
+
+If the installed vnstock version exposes the auth entrypoint from a different module location, the implementation may add a small compatibility fallback inside the adapter while preserving the same TradingAgents behavior contract.
 
 The adapter shall use the current public `vnstock` API at implementation time. Known usage patterns from current public docs include:
 
@@ -390,7 +415,7 @@ Required test files:
 Optional documentation files:
 
 - `CHANGELOG.md`: add an unreleased entry if the project convention requires it.
-- `.env.example`: only update if the final implementation needs environment variables. `vnstock` should not require credentials for the initial implementation.
+- `.env.example`: update when the implementation supports optional environment-driven vnstock auth. `VNSTOCK_API_KEY` must remain optional and must not be documented as a required credential for default vnstock usage.
 
 ## 5. Acceptance Criteria
 
@@ -411,6 +436,9 @@ Optional documentation files:
 - **AC-015**: Given mocked `vnstock` company data exposes `insider_trading()` and returns insider rows for `FPT`, when `get_insider_transactions("HOSE:FPT")` is called through the `vnstock` adapter, then the result contains a Markdown header plus CSV insider transaction data for `FPT`.
 - **AC-016**: Given the installed `vnstock` version does not expose insider transactions or returns no insider rows, when `get_insider_transactions("HOSE:FPT")` is called through the `vnstock` adapter, then it returns a clear unavailable-or-no-data message instead of falling through to yfinance.
 - **AC-017**: Given a coding agent reads this specification, it can identify all required files, interfaces, and tests without additional repository discovery.
+- **AC-018**: Given `VNSTOCK_API_KEY` is present in the environment and vnstock exposes a registration entrypoint, when `_load_vnstock()` is called for the first time, then the adapter registers the key before creating vnstock provider clients.
+- **AC-019**: Given `VNSTOCK_API_KEY` is absent, when vnstock-backed requests are executed, then the adapter continues in guest mode and does not raise a missing-credential error.
+- **AC-020**: Given `VNSTOCK_API_KEY` is present but vnstock registration raises an error, when `_load_vnstock()` is called, then the adapter returns a clear error indicating that configured vnstock authentication could not be initialized.
 
 ## 6. Test Automation Strategy
 
@@ -426,6 +454,7 @@ Optional documentation files:
 - **Benchmark Tests**: Mock benchmark data and assert `TradingAgentsGraph._fetch_returns` or its replacement uses the configured benchmark symbol.
 - **Graph Profile Tests**: Assert that `TradingAgentsGraph.propagate()` or its profile helper applies the Vietnam profile before data fetches for explicit Vietnam symbols.
 - **Fallback Tests**: Simulate `DataVendorUnavailableError` from `vnstock` and assert the router continues to the next configured vendor for non-explicit symbols. For explicit Vietnam symbols, assert that the router does not call yfinance as a silent fallback.
+- **Auth Initialization Tests**: Mock vnstock auth registration and assert one-time registration when `VNSTOCK_API_KEY` is set, no-op behavior when it is absent, and a clear failure when a configured key cannot be registered.
 
 Recommended commands:
 
@@ -443,7 +472,7 @@ pytest tests/test_ticker_symbol_handling.py tests/test_vnstock_adapter.py tests/
 
 TradingAgents currently supports provider routing for yfinance and Alpha Vantage. Vietnamese equities need a Vietnam-native data provider because yfinance symbol coverage, fundamentals, local indices, foreign-flow context, and news are incomplete or inconsistent for Vietnam.
 
-`vnstock` is the recommended first provider because it is Python-native, accessible without paid credentials, and covers the minimum data categories required for the existing TradingAgents workflow. Paid or broker-backed providers such as FiinQuant and SSI FastConnect may be more robust for real-time or institutional workloads, but they introduce onboarding and credential requirements that are not suitable for a first open-source integration.
+`vnstock` is the recommended first provider because it is Python-native, accessible without paid credentials, and covers the minimum data categories required for the existing TradingAgents workflow. The upstream project also supports optional user authentication for improved usage limits, so TradingAgents may auto-apply `VNSTOCK_API_KEY` when users provide it while still preserving guest-mode access by default. Paid or broker-backed providers such as FiinQuant and SSI FastConnect may be more robust for real-time or institutional workloads, but they introduce onboarding and credential requirements that are not suitable for a first open-source integration.
 
 The upstream `vnstock` unified API also exposes issuer-level insider transaction data, so the TradingAgents adapter should use that local Vietnam path directly instead of treating insider transactions as permanently unsupported.
 
@@ -469,6 +498,7 @@ The main correctness issue outside the data adapter is benchmark alpha. The curr
 - **DAT-002**: Vietnam financial statement data - Must include balance sheet, cash flow, and income statement tables when available.
 - **DAT-003**: Vietnam benchmark index data - Must include historical close prices for `VNINDEX` or an equivalent configured benchmark.
 - **DAT-004**: Vietnam insider transaction data - Must expose company insider dealing or disclosure records when the installed `vnstock` version supports them.
+- **DAT-005**: Optional vnstock authentication state - When `VNSTOCK_API_KEY` is supplied by the user, the adapter must be able to initialize vnstock auth from process environment state without introducing a new application config surface.
 
 ### Technology Platform Dependencies
 
@@ -524,7 +554,21 @@ _, decision = ta.propagate("FPT", "2026-04-20")
 No data found for symbol 'FAKE' between 2026-01-01 and 2026-01-31
 ```
 
-### 9.4 Missing Optional Dependency Example
+### 9.4 Optional API Key Example
+
+```python
+import os
+
+os.environ["VNSTOCK_API_KEY"] = "vnstock_RANDOM_KEY"
+
+# Later, the adapter imports vnstock and automatically runs the equivalent of:
+from vnstock import register_user
+register_user(api_key=os.environ["VNSTOCK_API_KEY"])
+```
+
+If `VNSTOCK_API_KEY` is absent, the adapter shall skip registration and continue in guest mode.
+
+### 9.5 Missing Optional Dependency Example
 
 ```text
 DataVendorUnavailableError: vnstock is not installed. Install vnstock or configure another data vendor.
@@ -534,7 +578,7 @@ If the configured vendor chain is `"vnstock,yfinance"` and the symbol is not an 
 
 For explicit Vietnam symbols such as `HOSE:VIC`, the router shall not silently call yfinance after `vnstock` is unavailable because yfinance treats those forms as invalid or delisted. The caller should install the Vietnam extra or choose a different configured workflow deliberately.
 
-### 9.5 Explicit Vietnam Symbol Routing Example
+### 9.6 Explicit Vietnam Symbol Routing Example
 
 ```text
 Input symbol: HOSE:VIC
@@ -545,13 +589,13 @@ Provider symbol: VIC
 
 The router-level guard applies even when the configured vendor starts with yfinance. If a graph run starts with `HOSE:VIC`, graph-level profile application also sets the run configuration to the Vietnam profile so later tool calls using either `HOSE:VIC` or plain `VIC` use `vnstock` first.
 
-### 9.6 News Unavailable Example
+### 9.7 News Unavailable Example
 
 ```text
 No vnstock news data available for FPT between 2026-01-01 and 2026-01-31.
 ```
 
-### 9.7 Insider Transactions Success Example
+### 9.8 Insider Transactions Success Example
 
 ```text
 # Insider Transactions data for FPT
@@ -562,7 +606,7 @@ transaction_date,person,transaction_type,volume
 2026-01-15,Nguyen Van A,Buy,100000
 ```
 
-### 9.8 Insider Transactions Unavailable Example
+### 9.9 Insider Transactions Unavailable Example
 
 ```text
 No vnstock insider transaction data available for FPT.
@@ -582,6 +626,8 @@ No vnstock insider transaction data available for FPT.
 - **VAL-010**: Explicit Vietnam symbols cannot trigger yfinance invalid-symbol or delisted warnings through ticker-scoped routed tool calls.
 - **VAL-011**: Programmatic graph runs using explicit Vietnam symbols apply the Vietnam profile before resolving pending memory-log entries.
 - **VAL-012**: The spec defines both insider transaction success behavior and the unavailable-or-empty fallback behavior for the `vnstock` adapter.
+- **VAL-013**: The spec defines optional automatic `VNSTOCK_API_KEY` registration without making vnstock credentials mandatory for default tests or guest-mode usage.
+- **VAL-014**: The spec defines expected behavior for both key-present and key-absent vnstock auth paths, including clear failure when a configured key cannot be registered.
 
 ## 11. Related Specifications / Further Reading
 
