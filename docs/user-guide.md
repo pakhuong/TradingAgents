@@ -71,6 +71,20 @@ For Vietnam data with pip:
 pip install -e ".[vietnam]"
 ```
 
+If you use vnstock sponsor/member features, install the base `vietnam` extra first and then add sponsor modules into that same virtual environment through vnstock's member installer. TradingAgents does not install or manage sponsor packages for you.
+
+Recommended order:
+
+1. Install TradingAgents with the base `vietnam` extra.
+2. Activate that same virtual environment.
+3. Follow the vnstock sponsor/member installer flow to add `vnstock_data`, `vnstock_ta`, and `vnstock_news`.
+4. Start TradingAgents normally; the vnstock adapter detects installed sponsor modules lazily at runtime.
+
+Sponsor installation references:
+
+- Sponsor overview: [Vnstock sponsor ecosystem](https://vnstocks.com/docs/vnstock-insider-api/index)
+- CLI/member installation: [Vnstock sponsor CLI install guide](https://vnstocks.com/onboard-member/cai-dat-go-loi/cai-dat-nang-cao)
+
 ## Configure API Keys
 
 Copy the example environment file and fill in the credentials for the provider you actually plan to use:
@@ -280,6 +294,13 @@ Then run the CLI and enter a supported symbol such as:
 
 Explicit Vietnam symbols automatically switch to the Vietnam profile, which uses `VNINDEX` as the benchmark and `VND` as the currency.
 
+Optional sponsor modules extend the adapter without changing your TradingAgents config:
+
+- `vnstock_data` is preferred for quote/history, financial statements, issuer-scoped company news, and insider transactions.
+- `vnstock_ta` is preferred for technical indicators; when it is missing or an indicator is unsupported, TradingAgents falls back to the local `stockstats` path.
+- `vnstock_news` enables Vietnam macro/global news aggregation.
+- `vnstock_pipeline` is not used on the interactive request path.
+
 ### Run with Docker
 
 For containerized usage:
@@ -351,6 +372,10 @@ uv sync --extra vietnam
 
 Without `vnstock`, explicit Vietnam symbols can fail or return empty data through generic vendors.
 
+### Vietnam global news still says unavailable
+
+The base `vietnam` extra installs `vnstock`, but TradingAgents only uses sponsor-backed Vietnam macro/global news when `vnstock_news` is also installed through vnstock's member flow in the same environment. `vnstock_data` and `vnstock_ta` are separate optional sponsor modules for company/finance data and technical indicators.
+
 ### A previous interrupted run keeps resuming
 
 Clear old checkpoints before starting again:
@@ -362,6 +387,10 @@ uv run tradingagents --clear-checkpoints
 ### Model calls hang too long
 
 The default per-call LLM timeout is `30` seconds. If you are using the Python API, you can override it through `config["llm_timeout"]`.
+
+### An OpenAI-compatible provider reports malformed JSON
+
+TradingAgents retries one malformed JSON response automatically when the OpenAI-compatible client receives an empty or truncated body. If the same error repeats, the provider is still returning invalid JSON; retry the run, switch models, or wait for the provider endpoint to recover.
 
 ### Where are memory and cache files stored?
 

@@ -14,6 +14,10 @@ Breaking changes within the 0.x line are called out explicitly.
   vendor adapter, with Vietnam market profile metadata, VNINDEX benchmark
   configuration, and CLI/docs examples for local symbols such as `FPT` and
   `HOSE:FPT`.
+- Optional sponsor/member vnstock modules (`vnstock_data`, `vnstock_ta`, and
+  `vnstock_news`) are now detected lazily so Vietnam quote/company/finance
+  calls, technical indicators, and macro news can use richer provider APIs
+  when installed without changing the default dependency set.
 
 ## [0.3.0] — 2026-06-22
 
@@ -75,6 +79,9 @@ structured output.
   the latest available trading session and returns a compact trailing window
   instead of expanding repeated non-trading-day placeholders, reducing prompt
   size for Market Analyst runs.
+- OpenAI-compatible model calls now retry once after malformed JSON responses
+  and raise a clearer runtime error with model and endpoint details if the
+  provider still returns an empty or truncated body.
 
 ### Removed
 

@@ -266,6 +266,27 @@ uv sync --extra vietnam
 pip install ".[vietnam]"
 ```
 
+If you use vnstock sponsor/member features, keep that base install and add the sponsor modules separately in the same virtual environment through vnstock's member installation flow. TradingAgents does not install or manage sponsor packages for you.
+
+Recommended order:
+
+1. Install TradingAgents with the base `vietnam` extra.
+2. Activate that same virtual environment.
+3. Follow the vnstock sponsor/member installer flow to add `vnstock_data`, `vnstock_ta`, and `vnstock_news`.
+4. Start TradingAgents normally; the vnstock adapter detects installed sponsor modules lazily at runtime.
+
+Sponsor installation references:
+
+- Sponsor overview: [Vnstock sponsor ecosystem](https://vnstocks.com/docs/vnstock-insider-api/index)
+- CLI/member installation: [Vnstock sponsor CLI install guide](https://vnstocks.com/onboard-member/cai-dat-go-loi/cai-dat-nang-cao)
+
+Base `vnstock` remains the fallback path when sponsor packages are absent. When sponsor modules are present, TradingAgents uses them selectively:
+
+- `vnstock_data` for preferred quote/history, financial-table, issuer-scoped company-news, and insider-transaction lookups.
+- `vnstock_ta` for preferred technical indicators; unsupported indicators still fall back to the local `stockstats` path.
+- `vnstock_news` for Vietnam macro/global news aggregation.
+- `vnstock_pipeline` is detected lazily but not used on the interactive request path.
+
 If you have a vnstock API key, set `VNSTOCK_API_KEY` in your shell or `.env`. TradingAgents will register it automatically when the vnstock adapter initializes. Leave it unset to use vnstock guest mode.
 
 The interactive CLI automatically switches explicit Vietnam symbols such as `HOSE:FPT`, `HNX:SHS`, `VIC.HM`, `VNINDEX`, and `VN30` to the Vietnam data profile. If `vnstock` is not installed, the CLI stops before running the LLM agents and prints the install command instead of producing an empty-data report.
