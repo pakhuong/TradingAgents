@@ -27,6 +27,21 @@ ANALYST_ORDER = [
 
 CRYPTO_SUFFIXES = ("-USD", "-USDT", "-USDC", "-BTC", "-ETH")
 
+OPENROUTER_RECOMMENDED_PAIRINGS = {
+    "lowest cost": {
+        "quick": "openai/gpt-oss-20b",
+        "deep": "openai/gpt-oss-120b",
+    },
+    "fastest run": {
+        "quick": "google/gemini-2.5-flash-lite",
+        "deep": "google/gemini-2.5-flash",
+    },
+    "best final decision quality": {
+        "quick": "anthropic/claude-sonnet-4.6",
+        "deep": "anthropic/claude-opus-4.7",
+    },
+}
+
 
 def is_valid_ticker_input(value: str) -> bool:
     """Whether a ticker entry is acceptable (charset + length).
@@ -242,6 +257,33 @@ def _fetch_openrouter_models() -> list[tuple[str, str]]:
         return []
 
 
+def get_openrouter_step7_prompt() -> str:
+    """Return Step 7 prompt copy with practical OpenRouter pairings."""
+    lines = [
+        "Select your thinking agents for analysis",
+        "Practical OpenRouter starting points:",
+    ]
+    for goal, models in OPENROUTER_RECOMMENDED_PAIRINGS.items():
+        lines.append(
+            f"- {goal.title()}: quick {models['quick']} | deep {models['deep']}"
+        )
+    return "\n".join(lines)
+
+
+def _get_openrouter_model_instruction(mode: str) -> str:
+    """Return a compact instruction block for OpenRouter model selection."""
+    lines = [
+        "- Use arrow keys to navigate",
+        "- Press Enter to select",
+    ]
+    for goal, models in OPENROUTER_RECOMMENDED_PAIRINGS.items():
+        lines.append(f"- {goal.title()}: {models[mode]}")
+    lines.append(
+        "- Only the 5 newest OpenRouter models are listed; use Custom model ID for a specific pick"
+    )
+    return "\n".join(lines)
+
+
 def _require_text(message: str, hint: str) -> str:
     """Prompt for a required value; exit cleanly if the user cancels.
 
@@ -281,7 +323,7 @@ def select_openrouter_model(mode: str) -> str:
     choice = questionary.select(
         f"Select Your [{mode.title()}-Thinking] OpenRouter Model (latest available):",
         choices=choices,
-        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        instruction=_get_openrouter_model_instruction(mode),
         style=questionary.Style([
             ("selected", "fg:magenta noinherit"),
             ("highlighted", "fg:magenta noinherit"),

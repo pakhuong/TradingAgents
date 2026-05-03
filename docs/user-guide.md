@@ -197,6 +197,24 @@ Provider-specific settings appear only when they are relevant:
 - OpenAI: reasoning effort
 - Anthropic: effort level
 
+### Practical OpenRouter pairings
+
+If you choose `OpenRouter` as the provider, the quick model usually has the biggest effect on runtime and total cost because it powers most of the graph. The deep model is used for the two synthesis steps that turn debate output into the research plan and the final portfolio decision.
+
+Use these pairings as practical starting points:
+
+| Goal                        | Quick model                    | Deep model                  | Why this pairing works                                                                                |
+| --------------------------- | ------------------------------ | --------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Lowest cost                 | `openai/gpt-oss-20b`           | `openai/gpt-oss-120b`       | Keeps the many upstream calls cheap while still giving the final synthesis a stronger model.          |
+| Fastest run                 | `google/gemini-2.5-flash-lite` | `google/gemini-2.5-flash`   | Optimized for low latency on the busy quick path without leaving the final decisions on a lite model. |
+| Best final decision quality | `anthropic/claude-sonnet-4.6`  | `anthropic/claude-opus-4.7` | Strongest practical quality-first pairing for upstream analysis plus final judgment.                  |
+
+Notes:
+
+- The OpenRouter picker only shows the newest five models plus a custom entry. If the model you want is not listed, choose `Custom model ID` and paste the exact ID.
+- `openrouter/free` and `openrouter/auto` are convenient for experimentation, but they are a poor fit when you want repeatable runs or easier comparisons across analyses.
+- OpenRouter pricing and availability change often. Recheck the live catalog if you are optimizing aggressively for cost.
+
 The analysis date cannot be in the future. Explicit Vietnam tickers such as `HOSE:FPT`, `HNX:SHS`, `VNINDEX`, and `VN30` automatically switch the run to the Vietnam market profile.
 
 ### What you see during the run
@@ -332,6 +350,14 @@ config["quick_think_llm"] = "gpt-5.4-mini"
 graph = TradingAgentsGraph(debug=True, config=config)
 state, decision = graph.propagate("NVDA", "2026-01-15")
 print(decision)
+```
+
+For OpenRouter, keep the provider as `openrouter` and pass the full model IDs instead of provider-local aliases. Example:
+
+```python
+config["llm_provider"] = "openrouter"
+config["quick_think_llm"] = "google/gemini-2.5-flash-lite"
+config["deep_think_llm"] = "google/gemini-2.5-flash"
 ```
 
 Useful config keys include:

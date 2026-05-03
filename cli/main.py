@@ -31,6 +31,7 @@ from cli.utils import (
     confirm_ollama_endpoint,
     detect_asset_type,
     ensure_api_key,
+    get_openrouter_step7_prompt,
     get_ticker,
     prompt_openai_compatible_url,
     resolve_backend_url,
@@ -670,9 +671,13 @@ def get_user_selections():
             f"quick={selected_shallow_thinker}, deep={selected_deep_thinker}"
         )
     else:
+        step_7_prompt = "Select your thinking agents for analysis"
+        if selected_llm_provider.lower() == "openrouter":
+            step_7_prompt = get_openrouter_step7_prompt()
+
         console.print(
             create_question_box(
-                "Step 7: Thinking Agents", "Select your thinking agents for analysis"
+                "Step 7: Thinking Agents", step_7_prompt
             )
         )
         selected_shallow_thinker = select_shallow_thinking_agent(selected_llm_provider)
