@@ -23,6 +23,21 @@ ANALYST_ORDER = [
     ("Fundamentals Analyst", AnalystType.FUNDAMENTALS),
 ]
 
+OPENROUTER_RECOMMENDED_PAIRINGS = {
+    "lowest cost": {
+        "quick": "openai/gpt-oss-20b",
+        "deep": "openai/gpt-oss-120b",
+    },
+    "fastest run": {
+        "quick": "google/gemini-2.5-flash-lite",
+        "deep": "google/gemini-2.5-flash",
+    },
+    "best final decision quality": {
+        "quick": "anthropic/claude-sonnet-4.6",
+        "deep": "anthropic/claude-opus-4.7",
+    },
+}
+
 
 def get_ticker() -> str:
     """Prompt the user to enter a ticker symbol."""
@@ -158,17 +173,44 @@ def _fetch_openrouter_models() -> List[Tuple[str, str]]:
         return []
 
 
-def select_openrouter_model() -> str:
-    """Select an OpenRouter model from the newest available, or enter a custom ID."""
+def get_openrouter_step7_prompt() -> str:
+    """Return Step 7 prompt copy with practical OpenRouter pairings."""
+    lines = [
+        "Select your thinking agents for analysis",
+        "Practical OpenRouter starting points:",
+    ]
+    for goal, models in OPENROUTER_RECOMMENDED_PAIRINGS.items():
+        lines.append(
+            f"- {goal.title()}: quick {models['quick']} | deep {models['deep']}"
+        )
+    return "\n".join(lines)
+
+
+def _get_openrouter_model_instruction(mode: str) -> str:
+    """Return a compact instruction block for OpenRouter model selection."""
+    lines = [
+        "- Use arrow keys to navigate",
+        "- Press Enter to select",
+    ]
+    for goal, models in OPENROUTER_RECOMMENDED_PAIRINGS.items():
+        lines.append(f"- {goal.title()}: {models[mode]}")
+    lines.append(
+        "- Only the 5 newest OpenRouter models are listed; use Custom model ID for a specific pick"
+    )
+    return "\n".join(lines)
+
+
+def select_openrouter_model(mode: str) -> str:
+    """Select an OpenRouter quick/deep model or enter a custom model ID."""
     models = _fetch_openrouter_models()
 
     choices = [questionary.Choice(name, value=mid) for name, mid in models[:5]]
     choices.append(questionary.Choice("Custom model ID", value="custom"))
 
     choice = questionary.select(
-        "Select OpenRouter Model (latest available):",
+        f"Select OpenRouter [{mode.title()}-Thinking] Model:",
         choices=choices,
-        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        instruction=_get_openrouter_model_instruction(mode),
         style=questionary.Style([
             ("selected", "fg:magenta noinherit"),
             ("highlighted", "fg:magenta noinherit"),
@@ -196,7 +238,7 @@ def _prompt_custom_model_id() -> str:
 def _select_model(provider: str, mode: str) -> str:
     """Select a model for the given provider and mode (quick/deep)."""
     if provider.lower() == "openrouter":
-        return select_openrouter_model()
+        return select_openrouter_model(mode)
 
     if provider.lower() == "azure":
         return questionary.text(

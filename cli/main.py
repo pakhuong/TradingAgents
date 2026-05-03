@@ -557,9 +557,13 @@ def get_user_selections():
     selected_llm_provider, backend_url = select_llm_provider()
 
     # Step 7: Thinking agents
+    step_7_prompt = "Select your thinking agents for analysis"
+    if selected_llm_provider.lower() == "openrouter":
+        step_7_prompt = get_openrouter_step7_prompt()
+
     console.print(
         create_question_box(
-            "Step 7: Thinking Agents", "Select your thinking agents for analysis"
+            "Step 7: Thinking Agents", step_7_prompt
         )
     )
     selected_shallow_thinker = select_shallow_thinking_agent(selected_llm_provider)
