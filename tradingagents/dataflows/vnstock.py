@@ -894,6 +894,15 @@ def _parse_date_like(value: Any) -> pd.Timestamp:
     return pd.to_datetime(text, errors="coerce")
 
 
+def _parse_news_date_like(value: Any) -> pd.Timestamp:
+    parsed = _parse_date_like(value)
+    if pd.isna(parsed):
+        return pd.NaT
+    if getattr(parsed, "tzinfo", None) is not None:
+        return parsed.tz_localize(None)
+    return parsed
+
+
 def _normalize_news_column_name(column: Any) -> str:
     return str(column).strip().lower().replace(" ", "_")
 
@@ -1120,7 +1129,7 @@ def _filter_news_by_date(data: pd.DataFrame, start_date: str, end_date: str) -> 
         key = _normalize_news_column_name(column)
         if key not in NEWS_DATE_COLUMN_NAMES:
             continue
-        parsed_values = data[column].map(_parse_date_like)
+        parsed_values = data[column].map(_parse_news_date_like)
         if parsed_values.notna().any():
             return data[(parsed_values.isna()) | ((parsed_values >= start) & (parsed_values <= end))]
     return data
@@ -1149,7 +1158,7 @@ def _sort_news_by_date(data: pd.DataFrame) -> pd.DataFrame:
         key = _normalize_news_column_name(column)
         if key not in NEWS_DATE_COLUMN_NAMES:
             continue
-        parsed_values = data[column].map(_parse_date_like)
+        parsed_values = data[column].map(_parse_news_date_like)
         if parsed_values.notna().any():
             return (
                 data.assign(_sort_date=parsed_values)
