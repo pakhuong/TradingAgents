@@ -727,6 +727,73 @@ def test_get_global_news_returns_no_data_when_all_articles_are_filtered(monkeypa
 
 
 @pytest.mark.unit
+def test_get_global_news_accepts_timezone_aware_pubdate(monkeypatch):
+    class FakeCrawler:
+        def __init__(self, site_name=None, site=None, source=None):
+            self.site_name = site_name or site or source
+
+        def get_articles(self, limit=10):
+            assert limit == 1
+            return [
+                {
+                    "title": "Asia inflation cools as bond yields retreat",
+                    "description": "Regional bond yields fell as investors tracked inflation and central bank guidance.",
+                    "pubDate": "2026-01-09T18:45:00+07:00",
+                    "url": "https://example.com/asia-inflation",
+                },
+                {
+                    "title": "Stale rates story",
+                    "description": "An older macro article that should be excluded by the lookback window.",
+                    "pubDate": "2025-12-20T08:00:00+07:00",
+                    "url": "https://example.com/stale-rates",
+                },
+            ]
+
+    fake_news_module = _fake_module(list_supported_sites=lambda: ["cafef"], Crawler=FakeCrawler)
+
+    monkeypatch.setattr(vnstock, "_optional_import", lambda module_name: fake_news_module if module_name == "vnstock_news" else None)
+
+    result = vnstock.get_global_news("2026-01-10", look_back_days=7, limit=1)
+
+    assert "Asia inflation cools as bond yields retreat" in result
+    assert "Stale rates story" not in result
+
+
+@pytest.mark.unit
+def test_get_global_news_sorts_mixed_timezone_and_naive_dates(monkeypatch):
+    class FakeCrawler:
+        def __init__(self, site_name=None, site=None, source=None):
+            self.site_name = site_name or site or source
+
+        def get_articles(self, limit=10):
+            assert limit == 2
+            return [
+                {
+                    "title": "Asia close climbs on rate-cut bets",
+                    "description": "Stocks gained as traders priced in softer inflation and more dovish central bank signals.",
+                    "publish_time": "2026-01-09T22:30:00+07:00",
+                    "url": "https://example.com/asia-close",
+                },
+                {
+                    "title": "Morning inflation snapshot",
+                    "description": "Inflation expectations eased while currency markets remained stable in early trade.",
+                    "publish_time": "2026-01-09",
+                    "url": "https://example.com/morning-inflation",
+                },
+            ]
+
+    fake_news_module = _fake_module(list_supported_sites=lambda: ["cafef"], Crawler=FakeCrawler)
+
+    monkeypatch.setattr(vnstock, "_optional_import", lambda module_name: fake_news_module if module_name == "vnstock_news" else None)
+
+    result = vnstock.get_global_news("2026-01-10", look_back_days=7, limit=2)
+
+    assert "Asia close climbs on rate-cut bets" in result
+    assert "Morning inflation snapshot" in result
+    assert result.index("Asia close climbs on rate-cut bets") < result.index("Morning inflation snapshot")
+
+
+@pytest.mark.unit
 def test_pipeline_not_used_by_current_request_handlers(monkeypatch):
     imported_modules = []
 
