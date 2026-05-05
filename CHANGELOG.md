@@ -24,6 +24,10 @@ Breaking changes within the 0.x line are called out explicitly.
 - Added a global `llm_timeout` config option (default `30` seconds) and pass it
   through when constructing provider clients so long-running model calls fail
   fast instead of hanging indefinitely.
+- Vietnam macro/global news from `vnstock_news` is now filtered through
+  deterministic macro-relevance rules over RSS/article metadata, reducing
+  issuer-specific or lifestyle headlines in `get_global_news(...)` while
+  accepting RSS-style `description` and `pubDate` fields.
 
 ### Fixed
 
