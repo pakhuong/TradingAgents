@@ -316,7 +316,7 @@ Optional sponsor modules extend the adapter without changing your TradingAgents 
 
 - `vnstock_data` is preferred for quote/history, financial statements, issuer-scoped company news, and insider transactions.
 - `vnstock_ta` is preferred for technical indicators; when it is missing or an indicator is unsupported, TradingAgents falls back to the local `stockstats` path.
-- `vnstock_news` enables Vietnam macro/global news aggregation.
+- `vnstock_news` enables Vietnam macro/global news aggregation, with adapter-side filtering that keeps market-wide and macroeconomic stories over issuer-specific finance headlines.
 - `vnstock_pipeline` is not used on the interactive request path.
 
 ### Run with Docker
@@ -401,6 +401,8 @@ Without `vnstock`, explicit Vietnam symbols can fail or return empty data throug
 ### Vietnam global news still says unavailable
 
 The base `vietnam` extra installs `vnstock`, but TradingAgents only uses sponsor-backed Vietnam macro/global news when `vnstock_news` is also installed through vnstock's member flow in the same environment. `vnstock_data` and `vnstock_ta` are separate optional sponsor modules for company/finance data and technical indicators.
+
+When `vnstock_news` is installed, `get_global_news(...)` still filters the crawled feed down to market-wide and macroeconomic items using metadata such as `title`, `description`, `short_description`, `category`, and `tags`. Issuer-specific finance stories stay on `get_news(...)`, and you can still see the unavailable message when the recent crawl contains no macro-relevant items.
 
 ### A previous interrupted run keeps resuming
 

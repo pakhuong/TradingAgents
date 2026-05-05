@@ -284,7 +284,7 @@ Base `vnstock` remains the fallback path when sponsor packages are absent. When 
 
 - `vnstock_data` for preferred quote/history, financial-table, issuer-scoped company-news, and insider-transaction lookups.
 - `vnstock_ta` for preferred technical indicators; unsupported indicators still fall back to the local `stockstats` path.
-- `vnstock_news` for Vietnam macro/global news aggregation.
+- `vnstock_news` for Vietnam macro/global news aggregation, with adapter-side filtering that keeps market-wide and macroeconomic stories over issuer-specific finance headlines.
 - `vnstock_pipeline` is detected lazily but not used on the interactive request path.
 
 If you have a vnstock API key, set `VNSTOCK_API_KEY` in your shell or `.env`. TradingAgents will register it automatically when the vnstock adapter initializes. Leave it unset to use vnstock guest mode.
