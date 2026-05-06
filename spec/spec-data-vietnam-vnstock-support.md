@@ -354,6 +354,10 @@ No vnstock news data available for FPT between 2026-01-01 and 2026-01-31.
 
 `get_global_news(curr_date, look_back_days, limit)` shall return Vietnam market macro headlines if available. If not available through `vnstock`, return a clear message that the vendor does not provide Vietnam macro news rather than falling back internally to US/global yfinance queries. Cross-vendor fallback shall remain the router's responsibility.
 
+When sponsor-backed `vnstock_news` data is available, the adapter shall apply deterministic, adapter-local relevance filtering after date bounding and before final sort/limit so only market-wide or macroeconomic items survive. The filter shall inspect whichever sponsor metadata fields are present, including RSS-style `title`, `description`, and `pubDate` inputs plus normalized article fields such as `short_description`, `category`, `tags`, and `content` when present.
+
+Issuer-specific finance stories that lack clear macro signals shall be excluded from `get_global_news(...)`; callers shall continue to use `get_news(...)` for company-scoped headlines. If all fetched rows are filtered out as non-macro, the adapter shall return the same clear unavailable message rather than surfacing unrelated headlines.
+
 `get_insider_transactions(ticker)` shall call a `vnstock` company insider transaction capability when the installed version exposes one, such as `stock.company.insider_trading()` or an equivalent current public API.
 
 If insider transaction data is returned, the adapter shall format it as Markdown plus CSV using the same table-report conventions as other tabular `vnstock` outputs.
@@ -449,7 +453,8 @@ Optional documentation files:
 - **Provider Registration Tests**: Assert that `"vnstock"` is present in `VENDOR_LIST` and mapped for the required methods.
 - **Symbol Tests**: Assert Vietnam symbol normalization while preserving existing exchange-qualified ticker behavior.
 - **Explicit Routing Tests**: Assert that explicit Vietnam symbols route to `vnstock` even when the default vendor config is yfinance, and that plain symbols continue to follow the configured vendor.
-- **DataFrame Tests**: Use small Pandas DataFrames to test OHLCV normalization, date filtering, and CSV formatting.
+- **DataFrame Tests**: Use small Pandas DataFrames to test OHLCV normalization, date filtering, CSV formatting, and sponsor-news date aliases such as `publish_time` and `pubDate`.
+- **News Filtering Tests**: Mock `vnstock_news` crawler rows with RSS-style `description` metadata, macro-indicator terms, issuer-specific finance terms, and no-data outcomes to validate deterministic macro filtering and the unavailable-message fallback.
 - **Insider Transaction Tests**: Mock `vnstock` company insider transaction responses and assert both successful CSV formatting and clear unavailable-or-empty fallback behavior.
 - **Benchmark Tests**: Mock benchmark data and assert `TradingAgentsGraph._fetch_returns` or its replacement uses the configured benchmark symbol.
 - **Graph Profile Tests**: Assert that `TradingAgentsGraph.propagate()` or its profile helper applies the Vietnam profile before data fetches for explicit Vietnam symbols.

@@ -506,7 +506,7 @@ def test_get_global_news_uses_vnstock_news_when_available(monkeypatch):
             assert limit == 1
             return [
                 {
-                    "title": "Vietnam market rally extends gains",
+                    "title": "Vietnam market rally extends as inflation cools",
                     "publish_time": "2026-01-09",
                     "url": "https://example.com/rally",
                 },
@@ -536,8 +536,261 @@ def test_get_global_news_uses_vnstock_news_when_available(monkeypatch):
     result = vnstock.get_global_news("2026-01-10", look_back_days=7, limit=1)
 
     assert FakeCrawler.seen_sites == ["cafef"]
-    assert "Vietnam market rally extends gains" in result
+    assert "Vietnam market rally extends as inflation cools" in result
     assert "Older article" not in result
+
+
+@pytest.mark.unit
+def test_get_global_news_uses_rss_style_metadata_for_macro_filter(monkeypatch):
+    class FakeCrawler:
+        def __init__(self, site_name=None, site=None, source=None):
+            self.site_name = site_name or site or source
+
+        def get_articles(self, limit=10):
+            assert limit == 1
+            return [
+                {
+                    "title": "Morning briefing",
+                    "description": "IMF says eurozone inflation is slowing as central bank policy remains restrictive.",
+                    "publish_time": "2026-01-09",
+                    "category": "Tài chính quốc tế",
+                    "tags": "vĩ mô, lãi suất",
+                    "url": "https://example.com/macro-briefing",
+                }
+            ]
+
+    fake_news_module = _fake_module(list_supported_sites=lambda: ["cafef"], Crawler=FakeCrawler)
+
+    monkeypatch.setattr(vnstock, "_optional_import", lambda module_name: fake_news_module if module_name == "vnstock_news" else None)
+
+    result = vnstock.get_global_news("2026-01-10", look_back_days=7, limit=1)
+
+    assert "Morning briefing" in result
+    assert "IMF says eurozone inflation is slowing" in result
+
+
+@pytest.mark.unit
+def test_get_global_news_accepts_macro_indicator_terms(monkeypatch):
+    class FakeCrawler:
+        def __init__(self, site_name=None, site=None, source=None):
+            self.site_name = site_name or site or source
+
+        def get_articles(self, limit=10):
+            assert limit == 1
+            return [
+                {
+                    "title": "Factory activity contracts again",
+                    "description": "Manufacturing PMI fell as traders priced a 25 basis points rate cut.",
+                    "publish_time": "2026-01-09",
+                    "url": "https://example.com/pmi",
+                }
+            ]
+
+    fake_news_module = _fake_module(list_supported_sites=lambda: ["cafef"], Crawler=FakeCrawler)
+
+    monkeypatch.setattr(vnstock, "_optional_import", lambda module_name: fake_news_module if module_name == "vnstock_news" else None)
+
+    result = vnstock.get_global_news("2026-01-10", look_back_days=7, limit=1)
+
+    assert "Factory activity contracts again" in result
+    assert "Manufacturing PMI fell as traders priced a 25 basis points rate cut." in result
+
+
+@pytest.mark.unit
+def test_get_global_news_excludes_issuer_story_despite_market_section_labels(monkeypatch):
+    class FakeCrawler:
+        def __init__(self, site_name=None, site=None, source=None):
+            self.site_name = site_name or site or source
+
+        def get_articles(self, limit=10):
+            assert limit == 1
+            return [
+                {
+                    "title": "CTCP ABC files quarterly report",
+                    "description": "Báo cáo tài chính cho thấy doanh thu quý tăng sau khi công ty mở rộng hoạt động.",
+                    "publish_time": "2026-01-09",
+                    "category": "Thị trường chứng khoán",
+                    "tags": "cổ phiếu, doanh nghiệp",
+                    "url": "https://example.com/issuer",
+                }
+            ]
+
+    fake_news_module = _fake_module(list_supported_sites=lambda: ["cafef"], Crawler=FakeCrawler)
+
+    monkeypatch.setattr(vnstock, "_optional_import", lambda module_name: fake_news_module if module_name == "vnstock_news" else None)
+
+    result = vnstock.get_global_news("2026-01-10", look_back_days=7, limit=1)
+
+    assert "vnstock does not provide Vietnam macro news data through the configured adapter" in result
+
+
+@pytest.mark.unit
+def test_get_global_news_recognizes_pubdate_field(monkeypatch):
+    class FakeCrawler:
+        def __init__(self, site_name=None, site=None, source=None):
+            self.site_name = site_name or site or source
+
+        def get_articles(self, limit=10):
+            assert limit == 1
+            return [
+                {
+                    "title": "Inflation eases across Asia",
+                    "description": "Regional inflation cooled as bond yields fell and investors monitored central bank signals.",
+                    "pubDate": "2026-01-09",
+                    "url": "https://example.com/inflation",
+                },
+                {
+                    "title": "Stale macro story",
+                    "description": "Older macro article should fall outside the lookback window.",
+                    "pubDate": "2025-12-20",
+                    "url": "https://example.com/stale",
+                },
+            ]
+
+    fake_news_module = _fake_module(list_supported_sites=lambda: ["cafef"], Crawler=FakeCrawler)
+
+    monkeypatch.setattr(vnstock, "_optional_import", lambda module_name: fake_news_module if module_name == "vnstock_news" else None)
+
+    result = vnstock.get_global_news("2026-01-10", look_back_days=7, limit=1)
+
+    assert "Inflation eases across Asia" in result
+    assert "Stale macro story" not in result
+
+
+@pytest.mark.unit
+def test_get_global_news_checks_later_sites_when_early_results_are_irrelevant(monkeypatch):
+    class FakeCrawler:
+        seen_sites = []
+
+        def __init__(self, site_name=None, site=None, source=None):
+            self.site_name = site_name or site or source
+            FakeCrawler.seen_sites.append(self.site_name)
+
+        def get_articles(self, limit=10):
+            assert limit == 1
+            if self.site_name == "cafef":
+                return [
+                    {
+                        "title": "Lifestyle roundup for weekend travel",
+                        "summary": "Top destinations and entertainment picks for holiday trips.",
+                        "publish_time": "2026-01-09",
+                        "url": "https://example.com/lifestyle",
+                    }
+                ]
+            return [
+                {
+                    "title": "Global stocks steady after Fed rate outlook",
+                    "summary": "Investors tracked bond yields and risk appetite across Asia.",
+                    "publish_time": "2026-01-09",
+                    "url": "https://example.com/fed",
+                }
+            ]
+
+    fake_news_module = _fake_module(
+        list_supported_sites=lambda: ["cafef", "vietstock"],
+        Crawler=FakeCrawler,
+    )
+
+    monkeypatch.setattr(vnstock, "_optional_import", lambda module_name: fake_news_module if module_name == "vnstock_news" else None)
+
+    result = vnstock.get_global_news("2026-01-10", look_back_days=7, limit=1)
+
+    assert FakeCrawler.seen_sites == ["cafef", "vietstock"]
+    assert "Global stocks steady after Fed rate outlook" in result
+    assert "Lifestyle roundup for weekend travel" not in result
+
+
+@pytest.mark.unit
+def test_get_global_news_returns_no_data_when_all_articles_are_filtered(monkeypatch):
+    class FakeCrawler:
+        def __init__(self, site_name=None, site=None, source=None):
+            self.site_name = site_name or site or source
+
+        def get_articles(self, limit=10):
+            assert limit == 1
+            return [
+                {
+                    "title": "Company dividend plan approved",
+                    "summary": "Shareholder meeting backed a new cash dividend for investors.",
+                    "publish_time": "2026-01-09",
+                    "url": "https://example.com/dividend",
+                }
+            ]
+
+    fake_news_module = _fake_module(list_supported_sites=lambda: ["cafef"], Crawler=FakeCrawler)
+
+    monkeypatch.setattr(vnstock, "_optional_import", lambda module_name: fake_news_module if module_name == "vnstock_news" else None)
+
+    result = vnstock.get_global_news("2026-01-10", look_back_days=7, limit=1)
+
+    assert "vnstock does not provide Vietnam macro news data through the configured adapter" in result
+
+
+@pytest.mark.unit
+def test_get_global_news_accepts_timezone_aware_pubdate(monkeypatch):
+    class FakeCrawler:
+        def __init__(self, site_name=None, site=None, source=None):
+            self.site_name = site_name or site or source
+
+        def get_articles(self, limit=10):
+            assert limit == 1
+            return [
+                {
+                    "title": "Asia inflation cools as bond yields retreat",
+                    "description": "Regional bond yields fell as investors tracked inflation and central bank guidance.",
+                    "pubDate": "2026-01-09T18:45:00+07:00",
+                    "url": "https://example.com/asia-inflation",
+                },
+                {
+                    "title": "Stale rates story",
+                    "description": "An older macro article that should be excluded by the lookback window.",
+                    "pubDate": "2025-12-20T08:00:00+07:00",
+                    "url": "https://example.com/stale-rates",
+                },
+            ]
+
+    fake_news_module = _fake_module(list_supported_sites=lambda: ["cafef"], Crawler=FakeCrawler)
+
+    monkeypatch.setattr(vnstock, "_optional_import", lambda module_name: fake_news_module if module_name == "vnstock_news" else None)
+
+    result = vnstock.get_global_news("2026-01-10", look_back_days=7, limit=1)
+
+    assert "Asia inflation cools as bond yields retreat" in result
+    assert "Stale rates story" not in result
+
+
+@pytest.mark.unit
+def test_get_global_news_sorts_mixed_timezone_and_naive_dates(monkeypatch):
+    class FakeCrawler:
+        def __init__(self, site_name=None, site=None, source=None):
+            self.site_name = site_name or site or source
+
+        def get_articles(self, limit=10):
+            assert limit == 2
+            return [
+                {
+                    "title": "Asia close climbs on rate-cut bets",
+                    "description": "Stocks gained as traders priced in softer inflation and more dovish central bank signals.",
+                    "publish_time": "2026-01-09T22:30:00+07:00",
+                    "url": "https://example.com/asia-close",
+                },
+                {
+                    "title": "Morning inflation snapshot",
+                    "description": "Inflation expectations eased while currency markets remained stable in early trade.",
+                    "publish_time": "2026-01-09",
+                    "url": "https://example.com/morning-inflation",
+                },
+            ]
+
+    fake_news_module = _fake_module(list_supported_sites=lambda: ["cafef"], Crawler=FakeCrawler)
+
+    monkeypatch.setattr(vnstock, "_optional_import", lambda module_name: fake_news_module if module_name == "vnstock_news" else None)
+
+    result = vnstock.get_global_news("2026-01-10", look_back_days=7, limit=2)
+
+    assert "Asia close climbs on rate-cut bets" in result
+    assert "Morning inflation snapshot" in result
+    assert result.index("Asia close climbs on rate-cut bets") < result.index("Morning inflation snapshot")
 
 
 @pytest.mark.unit

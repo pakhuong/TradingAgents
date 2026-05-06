@@ -108,6 +108,290 @@ SPONSOR_TA_COLUMN_TOKENS = {
     "boll_lb": ["lower", "bbl", "boll_lb"],
 }
 
+NEWS_DATE_COLUMN_NAMES = {
+    "date",
+    "time",
+    "pubdate",
+    "pub_date",
+    "publish_date",
+    "published",
+    "created_at",
+    "publish_time",
+}
+
+GLOBAL_NEWS_IGNORED_TEXT_COLUMNS = {
+    "id",
+    "uuid",
+    "date",
+    "time",
+    "pubdate",
+    "pub_date",
+    "publish_date",
+    "published",
+    "created_at",
+    "publish_time",
+    "url",
+    "link",
+    "image",
+    "thumbnail",
+    "site",
+    "site_name",
+    "source",
+    "author",
+    "ticker",
+    "symbol",
+}
+
+GLOBAL_NEWS_MACRO_KEYWORDS = (
+    "macro",
+    "macroeconomic",
+    "economy",
+    "economic growth",
+    "growth outlook",
+    "inflation",
+    "cpi",
+    "ppi",
+    "interest rate",
+    "interest rates",
+    "rate cut",
+    "rate cuts",
+    "rate hike",
+    "rate hikes",
+    "policy rate",
+    "basis point",
+    "basis points",
+    "bps",
+    "fed",
+    "federal reserve",
+    "ecb",
+    "central bank",
+    "bank of japan",
+    "boj",
+    "pboc",
+    "monetary policy",
+    "fiscal policy",
+    "stimulus",
+    "recession",
+    "stagflation",
+    "deflation",
+    "disinflation",
+    "gdp",
+    "pmi",
+    "manufacturing pmi",
+    "services pmi",
+    "composite pmi",
+    "industrial production",
+    "retail sales",
+    "consumer spending",
+    "unemployment",
+    "labor market",
+    "bond yield",
+    "treasury yield",
+    "tariff",
+    "trade war",
+    "trade surplus",
+    "trade deficit",
+    "capital inflow",
+    "capital inflows",
+    "capital outflow",
+    "capital outflows",
+    "exports",
+    "imports",
+    "exchange rate",
+    "foreign exchange",
+    "forex",
+    "currency",
+    "supply chain",
+    "imf",
+    "world bank",
+    "oecd",
+    "opec",
+    "asean",
+    "commodity",
+    "commodities",
+    "oil price",
+    "crude oil",
+    "gold price",
+    "natural gas",
+    "kinh tế",
+    "vĩ mô",
+    "vi mo",
+    "lạm phát",
+    "lãi suất",
+    "cắt giảm lãi suất",
+    "tăng lãi suất",
+    "điểm cơ bản",
+    "ngân hàng trung ương",
+    "chính sách tiền tệ",
+    "chính sách tài khóa",
+    "suy thoái",
+    "giảm phát",
+    "giảm lạm phát",
+    "pmi sản xuất",
+    "pmi dịch vụ",
+    "pmi tổng hợp",
+    "sản xuất công nghiệp",
+    "doanh số bán lẻ",
+    "chi tiêu tiêu dùng",
+    "thất nghiệp",
+    "lợi suất",
+    "tỷ giá",
+    "ngoại hối",
+    "chiến tranh thương mại",
+    "dòng vốn vào",
+    "dòng vốn ra",
+    "xuất khẩu",
+    "nhập khẩu",
+    "chuỗi cung ứng",
+    "quỹ tiền tệ quốc tế",
+    "ngân hàng thế giới",
+    "giá dầu",
+    "giá vàng",
+    "giá hàng hóa",
+)
+
+GLOBAL_NEWS_MARKET_KEYWORDS = (
+    "stock market",
+    "equity market",
+    "financial market",
+    "bond market",
+    "currency market",
+    "market rally",
+    "market selloff",
+    "market volatility",
+    "stocks",
+    "equities",
+    "bonds",
+    "yields",
+    "vn-index",
+    "vnindex",
+    "vn30",
+    "hnx-index",
+    "upcom-index",
+    "s&p 500",
+    "nasdaq",
+    "dow jones",
+    "nikkei",
+    "hang seng",
+    "shanghai composite",
+    "msci",
+    "stock index",
+    "stock indices",
+    "market index",
+    "market indices",
+    "indices",
+    "risk appetite",
+    "capital flows",
+    "thị trường chứng khoán",
+    "thị trường tài chính",
+    "thị trường trái phiếu",
+    "thị trường tiền tệ",
+    "biến động thị trường",
+    "chỉ số chứng khoán",
+    "chỉ số thị trường",
+    "chỉ số",
+    "dòng vốn",
+)
+
+GLOBAL_NEWS_SCOPE_KEYWORDS = (
+    "global",
+    "world",
+    "worldwide",
+    "international",
+    "regional",
+    "cross-border",
+    "asia",
+    "asian",
+    "europe",
+    "european",
+    "eurozone",
+    "emerging markets",
+    "united states",
+    "u.s.",
+    "china",
+    "japan",
+    "vietnam",
+    "domestic economy",
+    "international finance",
+    "global markets",
+    "world markets",
+    "asean",
+    "tài chính quốc tế",
+    "tai chinh quoc te",
+    "chứng khoán thế giới",
+    "chung khoan the gioi",
+    "kinh tế thế giới",
+    "kinh te the gioi",
+    "toàn cầu",
+    "thế giới",
+    "quốc tế",
+    "khu vực",
+    "mỹ",
+    "trung quốc",
+    "nhật bản",
+    "châu âu",
+    "việt nam",
+)
+
+GLOBAL_NEWS_EXCLUDED_KEYWORDS = (
+    "earnings",
+    "quarterly results",
+    "profit after tax",
+    "dividend",
+    "shareholder meeting",
+    "agm",
+    "ipo",
+    "merger",
+    "acquisition",
+    "ceo",
+    "board of directors",
+    "product launch",
+    "contract award",
+    "factory opening",
+    "tourism",
+    "travel",
+    "lifestyle",
+    "fashion",
+    "entertainment",
+    "celebrity",
+    "football",
+    "sports",
+    "kết quả kinh doanh",
+    "lợi nhuận",
+    "lợi nhuận sau thuế",
+    "cổ tức",
+    "đại hội cổ đông",
+    "đhcđ",
+    "ctcp",
+    "công ty cổ phần",
+    "hđqt",
+    "hội đồng quản trị",
+    "báo cáo tài chính",
+    "doanh thu quý",
+    "doanh thu thuần",
+    "doanh thu hợp nhất",
+    "niêm yết",
+    "mã cổ phiếu",
+    "mã chứng khoán",
+    "cổ đông lớn",
+    "trái phiếu doanh nghiệp",
+    "chủ tịch hđqt",
+    "tổng giám đốc",
+    "mua cổ phiếu quỹ",
+    "phát hành riêng lẻ",
+    "thoái vốn",
+    "ra mắt sản phẩm",
+    "dự án bất động sản",
+    "du lịch",
+    "đời sống",
+    "thời trang",
+    "giải trí",
+    "bóng đá",
+    "showbiz",
+    "ẩm thực",
+    "khuyến mãi",
+)
+
 
 def _load_vnstock():
     """Import vnstock lazily so default installs and tests can collect without it."""
@@ -610,6 +894,89 @@ def _parse_date_like(value: Any) -> pd.Timestamp:
     return pd.to_datetime(text, errors="coerce")
 
 
+def _parse_news_date_like(value: Any) -> pd.Timestamp:
+    parsed = _parse_date_like(value)
+    if pd.isna(parsed):
+        return pd.NaT
+    if getattr(parsed, "tzinfo", None) is not None:
+        return parsed.tz_localize(None)
+    return parsed
+
+
+def _normalize_news_column_name(column: Any) -> str:
+    return str(column).strip().lower().replace(" ", "_")
+
+
+def _normalize_news_text(text: str) -> str:
+    normalized = re.sub(r"<[^>]+>", " ", text)
+    normalized = re.sub(r"[^\w\s]", " ", normalized, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", normalized.lower()).strip()
+
+
+def _iter_text_like_fragments(value: Any):
+    if value is None:
+        return
+    if isinstance(value, str):
+        text = value.strip()
+        if text and not re.fullmatch(r"https?://\S+", text):
+            yield text
+        return
+    if isinstance(value, dict):
+        for nested_value in value.values():
+            yield from _iter_text_like_fragments(nested_value)
+        return
+    if isinstance(value, (list, tuple, set)):
+        for nested_value in value:
+            yield from _iter_text_like_fragments(nested_value)
+        return
+    try:
+        if pd.isna(value):
+            return
+    except TypeError:
+        return
+
+
+def _count_keyword_matches(text: str, keywords: tuple[str, ...]) -> int:
+    match_count = 0
+    for keyword in keywords:
+        pattern = r"(?<!\w)" + re.escape(_normalize_news_text(keyword)) + r"(?!\w)"
+        if re.search(pattern, text):
+            match_count += 1
+    return match_count
+
+
+def _build_global_news_text(row: pd.Series) -> str:
+    fragments = []
+    for column, value in row.items():
+        if _normalize_news_column_name(column) in GLOBAL_NEWS_IGNORED_TEXT_COLUMNS:
+            continue
+        fragments.extend(_iter_text_like_fragments(value))
+    return _normalize_news_text(" ".join(fragments))
+
+
+def _is_relevant_global_news_row(row: pd.Series) -> bool:
+    text = _build_global_news_text(row)
+    if not text:
+        return False
+
+    macro_matches = _count_keyword_matches(text, GLOBAL_NEWS_MACRO_KEYWORDS)
+    market_matches = _count_keyword_matches(text, GLOBAL_NEWS_MARKET_KEYWORDS)
+    scope_matches = _count_keyword_matches(text, GLOBAL_NEWS_SCOPE_KEYWORDS)
+    excluded_matches = _count_keyword_matches(text, GLOBAL_NEWS_EXCLUDED_KEYWORDS)
+
+    has_clear_macro_signal = macro_matches >= 2 or (macro_matches >= 1 and (market_matches >= 1 or scope_matches >= 1))
+    has_market_wide_signal = market_matches >= 2 and scope_matches >= 1
+    is_excluded = excluded_matches >= 1 and macro_matches < 2 and market_matches < 2
+    return (has_clear_macro_signal or has_market_wide_signal) and not is_excluded
+
+
+def _filter_relevant_global_news(data: pd.DataFrame) -> pd.DataFrame:
+    if data.empty:
+        return data
+    mask = data.apply(_is_relevant_global_news_row, axis=1)
+    return data[mask].reset_index(drop=True)
+
+
 def _filter_financials_by_curr_date(data: pd.DataFrame, curr_date: str | None) -> pd.DataFrame:
     if not curr_date or data is None:
         return pd.DataFrame(data)
@@ -758,12 +1125,11 @@ def _filter_news_by_date(data: pd.DataFrame, start_date: str, end_date: str) -> 
         return data
     start = pd.Timestamp(start_date)
     end = pd.Timestamp(end_date) + pd.Timedelta(days=1)
-    date_column_names = {"date", "time", "pub_date", "publish_date", "published", "created_at"}
     for column in data.columns:
-        key = str(column).strip().lower().replace(" ", "_")
-        if key not in date_column_names:
+        key = _normalize_news_column_name(column)
+        if key not in NEWS_DATE_COLUMN_NAMES:
             continue
-        parsed_values = data[column].map(_parse_date_like)
+        parsed_values = data[column].map(_parse_news_date_like)
         if parsed_values.notna().any():
             return data[(parsed_values.isna()) | ((parsed_values >= start) & (parsed_values <= end))]
     return data
@@ -788,12 +1154,11 @@ def _sort_news_by_date(data: pd.DataFrame) -> pd.DataFrame:
     if data.empty:
         return data
 
-    date_column_names = {"date", "time", "pub_date", "publish_date", "published", "created_at", "publish_time"}
     for column in data.columns:
-        key = str(column).strip().lower().replace(" ", "_")
-        if key not in date_column_names:
+        key = _normalize_news_column_name(column)
+        if key not in NEWS_DATE_COLUMN_NAMES:
             continue
-        parsed_values = data[column].map(_parse_date_like)
+        parsed_values = data[column].map(_parse_news_date_like)
         if parsed_values.notna().any():
             return (
                 data.assign(_sort_date=parsed_values)
@@ -854,6 +1219,7 @@ def _fetch_global_news_with_sponsor(curr_date: str, look_back_days: int, limit: 
     if crawler_cls is None or not site_names:
         return pd.DataFrame()
 
+    requested_limit = max(limit, 1)
     start_date = (pd.Timestamp(curr_date) - pd.Timedelta(days=look_back_days)).strftime("%Y-%m-%d")
     article_frames = []
     for site_name in site_names:
@@ -875,7 +1241,7 @@ def _fetch_global_news_with_sponsor(curr_date: str, look_back_days: int, limit: 
             continue
 
         try:
-            records = _call_with_fallbacks(get_articles, [{"limit": max(limit, 1)}, {}])
+            records = _call_with_fallbacks(get_articles, [{"limit": requested_limit}, {}])
         except Exception:
             continue
 
@@ -884,17 +1250,21 @@ def _fetch_global_news_with_sponsor(curr_date: str, look_back_days: int, limit: 
             continue
 
         article_frames.append(frame)
-        filtered = _filter_news_by_date(pd.concat(article_frames, ignore_index=True), start_date, curr_date)
+        filtered = _filter_relevant_global_news(
+            _filter_news_by_date(pd.concat(article_frames, ignore_index=True), start_date, curr_date)
+        )
         if len(filtered) >= limit:
             break
 
     if not article_frames:
         return pd.DataFrame()
 
-    data = _filter_news_by_date(pd.concat(article_frames, ignore_index=True), start_date, curr_date)
+    data = _filter_relevant_global_news(
+        _filter_news_by_date(pd.concat(article_frames, ignore_index=True), start_date, curr_date)
+    )
     if data.empty:
         return data
-    return _sort_news_by_date(data).head(max(limit, 1)).reset_index(drop=True)
+    return _sort_news_by_date(data).head(requested_limit).reset_index(drop=True)
 
 
 def get_news(
