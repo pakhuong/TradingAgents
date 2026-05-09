@@ -74,6 +74,7 @@ DEFAULT_CONFIG = {
     # Provider-specific thinking configuration
     "google_thinking_level": None,      # "high", "minimal", etc.
     "openai_reasoning_effort": None,    # "medium", "high", "low"
+    "openrouter_reasoning_effort": None,  # "xhigh", "high", "medium", "low", "minimal", "none"
     "anthropic_effort": None,           # "high", "medium", "low"
     "llm_timeout": 30,
     # Checkpoint/resume: when True, LangGraph saves state after each node

@@ -8,6 +8,7 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
     ("provider", "config_key", "config_value", "expected_key"),
     [
         ("openai", "openai_reasoning_effort", "high", "reasoning_effort"),
+        ("openrouter", "openrouter_reasoning_effort", "high", "reasoning_effort"),
         ("google", "google_thinking_level", "high", "thinking_level"),
         ("anthropic", "anthropic_effort", "medium", "effort"),
     ],
@@ -43,3 +44,15 @@ def test_provider_kwargs_skip_timeout_when_not_configured():
 
     assert "timeout" not in kwargs
     assert kwargs["reasoning_effort"] == "low"
+
+
+@pytest.mark.unit
+def test_provider_kwargs_skip_openrouter_reasoning_when_not_configured():
+    graph = TradingAgentsGraph.__new__(TradingAgentsGraph)
+    graph.config = {
+        "llm_provider": "openrouter",
+    }
+
+    kwargs = TradingAgentsGraph._get_provider_kwargs(graph)
+
+    assert kwargs == {}
