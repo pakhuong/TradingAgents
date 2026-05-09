@@ -26,6 +26,7 @@ from cli.utils import (
     ask_glm_region,
     ask_minimax_region,
     ask_openai_reasoning_effort,
+    ask_openrouter_reasoning_effort,
     ask_output_language,
     ask_qwen_region,
     confirm_ollama_endpoint,
@@ -690,12 +691,14 @@ def get_user_selections():
     # provider's own default.
     thinking_level = None
     reasoning_effort = None
+    openrouter_reasoning_effort = None
     anthropic_effort = None
 
     provider_lower = selected_llm_provider.lower()
     if provider_from_env:
         thinking_level = DEFAULT_CONFIG["google_thinking_level"]
         reasoning_effort = DEFAULT_CONFIG["openai_reasoning_effort"]
+        openrouter_reasoning_effort = DEFAULT_CONFIG["openrouter_reasoning_effort"]
         anthropic_effort = DEFAULT_CONFIG["anthropic_effort"]
     elif provider_lower == "google":
         thinking_level = thinking_value_or_prompt(
@@ -708,6 +711,12 @@ def get_user_selections():
             "TRADINGAGENTS_OPENAI_REASONING_EFFORT", "openai_reasoning_effort",
             "Reasoning effort", "Step 8: Reasoning Effort",
             "Configure OpenAI reasoning effort level", ask_openai_reasoning_effort,
+        )
+    elif provider_lower == "openrouter":
+        openrouter_reasoning_effort = thinking_value_or_prompt(
+            "TRADINGAGENTS_OPENROUTER_REASONING_EFFORT", "openrouter_reasoning_effort",
+            "OpenRouter reasoning effort", "Step 8: OpenRouter Reasoning",
+            "Configure OpenRouter reasoning effort level", ask_openrouter_reasoning_effort,
         )
     elif provider_lower == "anthropic":
         anthropic_effort = thinking_value_or_prompt(
@@ -728,6 +737,7 @@ def get_user_selections():
         "deep_thinker": selected_deep_thinker,
         "google_thinking_level": thinking_level,
         "openai_reasoning_effort": reasoning_effort,
+        "openrouter_reasoning_effort": openrouter_reasoning_effort,
         "anthropic_effort": anthropic_effort,
         "output_language": output_language,
     }
@@ -984,6 +994,7 @@ def _build_run_config(selections: dict, checkpoint: bool | None) -> dict:
     # Provider-specific thinking configuration
     config["google_thinking_level"] = selections.get("google_thinking_level")
     config["openai_reasoning_effort"] = selections.get("openai_reasoning_effort")
+    config["openrouter_reasoning_effort"] = selections.get("openrouter_reasoning_effort")
     config["anthropic_effort"] = selections.get("anthropic_effort")
     config["output_language"] = selections.get("output_language", "English")
     # --checkpoint/--no-checkpoint overrides only when explicitly given; omitting

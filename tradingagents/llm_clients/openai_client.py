@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
@@ -198,7 +199,7 @@ class MinimaxChatOpenAI(NormalizedChatOpenAI):
 # Kwargs forwarded from user config to ChatOpenAI
 _PASSTHROUGH_KWARGS = (
     "timeout", "max_retries", "reasoning_effort", "temperature",
-    "api_key", "callbacks", "http_client", "http_async_client",
+    "api_key", "callbacks", "http_client", "http_async_client", "extra_body",
 )
 
 # OpenAI's ``reasoning_effort`` is only accepted by reasoning models — the GPT-5
@@ -266,6 +267,20 @@ OPENAI_COMPATIBLE_PROVIDERS: dict[str, ProviderSpec] = {
 }
 
 
+def _resolve_chat_class(chat_class: type) -> type:
+    """Resolve registry chat classes through module symbols for monkeypatching."""
+    class_name = getattr(chat_class, "__name__", "")
+    if class_name == "NormalizedChatOpenAI":
+        return NormalizedChatOpenAI
+    if class_name == "DeepSeekChatOpenAI":
+        return DeepSeekChatOpenAI
+    if class_name == "MinimaxChatOpenAI":
+        return MinimaxChatOpenAI
+    if class_name == "LocalCompatibleChatOpenAI":
+        return LocalCompatibleChatOpenAI
+    return chat_class
+
+
 def is_openai_compatible(provider: str) -> bool:
     """Whether ``provider`` is served by the OpenAI-compatible registry."""
     return provider.lower() in OPENAI_COMPATIBLE_PROVIDERS
@@ -285,6 +300,39 @@ def _is_native_openai_base_url(base_url: str | None) -> bool:
         base_url = "https://" + base_url
     host = urlparse(base_url).hostname or ""
     return host == "api.openai.com" or host.endswith(".openai.com")
+
+
+def _apply_openrouter_reasoning(llm_kwargs: dict[str, Any], client_kwargs: dict[str, Any]) -> None:
+    """Translate semantic reasoning effort into OpenRouter's nested reasoning payload."""
+    effort = client_kwargs.get("reasoning_effort")
+    if not effort:
+        return
+
+    llm_kwargs.pop("reasoning_effort", None)
+
+    extra_body = llm_kwargs.get("extra_body")
+    if extra_body is None:
+        merged_extra_body: dict[str, Any] = {}
+    elif isinstance(extra_body, Mapping):
+        merged_extra_body = dict(extra_body)
+    else:
+        raise ValueError(
+            "OpenRouter extra_body must be a mapping when reasoning support is enabled."
+        )
+
+    reasoning = merged_extra_body.get("reasoning")
+    if reasoning is None:
+        merged_reasoning: dict[str, Any] = {}
+    elif isinstance(reasoning, Mapping):
+        merged_reasoning = dict(reasoning)
+    else:
+        raise ValueError(
+            "OpenRouter extra_body.reasoning must be a mapping when reasoning support is enabled."
+        )
+
+    merged_reasoning["effort"] = effort
+    merged_extra_body["reasoning"] = merged_reasoning
+    llm_kwargs["extra_body"] = merged_extra_body
 
 
 class OpenAIClient(BaseLLMClient):
@@ -314,7 +362,7 @@ class OpenAIClient(BaseLLMClient):
         chat_cls = NormalizedChatOpenAI
 
         if spec is not None:
-            chat_cls = spec.chat_class
+            chat_cls = _resolve_chat_class(spec.chat_class)
 
             # base_url precedence: explicit client base_url (carries the config /
             # TRADINGAGENTS_LLM_BACKEND_URL value) > provider env override (e.g.
@@ -361,6 +409,9 @@ class OpenAIClient(BaseLLMClient):
             if key == "reasoning_effort" and not _supports_reasoning_effort(self.model):
                 continue
             llm_kwargs[key] = self.kwargs[key]
+
+        if self.provider == "openrouter":
+            _apply_openrouter_reasoning(llm_kwargs, self.kwargs)
 
         # The subclass (provider quirks) comes from the registry spec.
         return chat_cls(**llm_kwargs)

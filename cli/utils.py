@@ -506,6 +506,27 @@ def ask_openai_reasoning_effort() -> str:
     ).ask()
 
 
+def ask_openrouter_reasoning_effort() -> str | None:
+    """Ask for OpenRouter reasoning effort level."""
+    choices = [
+        questionary.Choice("Medium (Default)", "medium"),
+        questionary.Choice("High (More thorough)", "high"),
+        questionary.Choice("Low (Faster)", "low"),
+        questionary.Choice("Minimal (Lowest reasoning budget)", "minimal"),
+        questionary.Choice("XHigh (Maximum reasoning budget)", "xhigh"),
+        questionary.Choice("None (Disable reasoning)", "none"),
+    ]
+    return questionary.select(
+        "Select OpenRouter Reasoning Effort:",
+        choices=choices,
+        style=questionary.Style([
+            ("selected", "fg:cyan noinherit"),
+            ("highlighted", "fg:cyan noinherit"),
+            ("pointer", "fg:cyan noinherit"),
+        ]),
+    ).ask()
+
+
 def ask_anthropic_effort() -> str | None:
     """Ask for Anthropic effort level.
 
