@@ -195,6 +195,7 @@ Provider-specific settings appear only when they are relevant:
 
 - Google: Gemini thinking mode
 - OpenAI: reasoning effort
+- OpenRouter: reasoning effort
 - Anthropic: effort level
 
 ### Practical OpenRouter pairings
@@ -212,6 +213,7 @@ Use these pairings as practical starting points:
 Notes:
 
 - The OpenRouter picker only shows the newest five models plus a custom entry. If the model you want is not listed, choose `Custom model ID` and paste the exact ID.
+- If you choose `OpenRouter`, Step 8 lets you set reasoning effort from `none` through `xhigh`. Start with `medium` if you are unsure.
 - `openrouter/free` and `openrouter/auto` are convenient for experimentation, but they are a poor fit when you want repeatable runs or easier comparisons across analyses.
 - OpenRouter pricing and availability change often. Recheck the live catalog if you are optimizing aggressively for cost.
 
@@ -358,6 +360,7 @@ For OpenRouter, keep the provider as `openrouter` and pass the full model IDs in
 config["llm_provider"] = "openrouter"
 config["quick_think_llm"] = "google/gemini-2.5-flash-lite"
 config["deep_think_llm"] = "google/gemini-2.5-flash"
+config["openrouter_reasoning_effort"] = "high"
 ```
 
 Useful config keys include:
