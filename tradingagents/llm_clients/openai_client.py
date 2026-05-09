@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from collections.abc import Mapping
 from typing import Any, Optional
 
 from langchain_core.messages import AIMessage
@@ -166,7 +167,7 @@ class MinimaxChatOpenAI(NormalizedChatOpenAI):
 # Kwargs forwarded from user config to ChatOpenAI
 _PASSTHROUGH_KWARGS = (
     "timeout", "max_retries", "reasoning_effort",
-    "api_key", "callbacks", "http_client", "http_async_client",
+    "api_key", "callbacks", "http_client", "http_async_client", "extra_body",
 )
 
 # Provider base URLs. API-key env vars live in api_key_env.PROVIDER_API_KEY_ENV
@@ -187,7 +188,6 @@ _PROVIDER_BASE_URL = {
     "ollama":     "http://localhost:11434/v1",
 }
 
-
 def _resolve_provider_base_url(provider: str) -> Optional[str]:
     """Default base URL for ``provider``, with env-var overrides where defined.
 
@@ -202,6 +202,39 @@ def _resolve_provider_base_url(provider: str) -> Optional[str]:
         if env_url:
             return env_url
     return _PROVIDER_BASE_URL.get(provider)
+
+
+def _apply_openrouter_reasoning(llm_kwargs: dict[str, Any], client_kwargs: dict[str, Any]) -> None:
+    """Translate semantic reasoning effort into OpenRouter's nested reasoning payload."""
+    effort = client_kwargs.get("reasoning_effort")
+    if not effort:
+        return
+
+    llm_kwargs.pop("reasoning_effort", None)
+
+    extra_body = llm_kwargs.get("extra_body")
+    if extra_body is None:
+        merged_extra_body: dict[str, Any] = {}
+    elif isinstance(extra_body, Mapping):
+        merged_extra_body = dict(extra_body)
+    else:
+        raise ValueError(
+            "OpenRouter extra_body must be a mapping when reasoning support is enabled."
+        )
+
+    reasoning = merged_extra_body.get("reasoning")
+    if reasoning is None:
+        merged_reasoning: dict[str, Any] = {}
+    elif isinstance(reasoning, Mapping):
+        merged_reasoning = dict(reasoning)
+    else:
+        raise ValueError(
+            "OpenRouter extra_body.reasoning must be a mapping when reasoning support is enabled."
+        )
+
+    merged_reasoning["effort"] = effort
+    merged_extra_body["reasoning"] = merged_reasoning
+    llm_kwargs["extra_body"] = merged_extra_body
 
 
 class OpenAIClient(BaseLLMClient):
@@ -253,6 +286,9 @@ class OpenAIClient(BaseLLMClient):
         for key in _PASSTHROUGH_KWARGS:
             if key in self.kwargs:
                 llm_kwargs[key] = self.kwargs[key]
+
+        if self.provider == "openrouter":
+            _apply_openrouter_reasoning(llm_kwargs, self.kwargs)
 
         # Native OpenAI: use Responses API for consistent behavior across
         # all model families. Third-party providers use Chat Completions.

@@ -170,6 +170,11 @@ class TradingAgentsGraph:
             if reasoning_effort:
                 kwargs["reasoning_effort"] = reasoning_effort
 
+        elif provider == "openrouter":
+            reasoning_effort = self.config.get("openrouter_reasoning_effort")
+            if reasoning_effort:
+                kwargs["reasoning_effort"] = reasoning_effort
+
         elif provider == "anthropic":
             effort = self.config.get("anthropic_effort")
             if effort:

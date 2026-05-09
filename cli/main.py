@@ -588,6 +588,7 @@ def get_user_selections():
     # Step 8: Provider-specific thinking configuration
     thinking_level = None
     reasoning_effort = None
+    openrouter_reasoning_effort = None
     anthropic_effort = None
 
     provider_lower = selected_llm_provider.lower()
@@ -607,6 +608,14 @@ def get_user_selections():
             )
         )
         reasoning_effort = ask_openai_reasoning_effort()
+    elif provider_lower == "openrouter":
+        console.print(
+            create_question_box(
+                "Step 8: OpenRouter Reasoning",
+                "Configure OpenRouter reasoning effort level"
+            )
+        )
+        openrouter_reasoning_effort = ask_openrouter_reasoning_effort()
     elif provider_lower == "anthropic":
         console.print(
             create_question_box(
@@ -627,6 +636,7 @@ def get_user_selections():
         "deep_thinker": selected_deep_thinker,
         "google_thinking_level": thinking_level,
         "openai_reasoning_effort": reasoning_effort,
+        "openrouter_reasoning_effort": openrouter_reasoning_effort,
         "anthropic_effort": anthropic_effort,
         "output_language": output_language,
     }
@@ -979,6 +989,7 @@ def run_analysis(checkpoint: bool = False):
     # Provider-specific thinking configuration
     config["google_thinking_level"] = selections.get("google_thinking_level")
     config["openai_reasoning_effort"] = selections.get("openai_reasoning_effort")
+    config["openrouter_reasoning_effort"] = selections.get("openrouter_reasoning_effort")
     config["anthropic_effort"] = selections.get("anthropic_effort")
     config["output_language"] = selections.get("output_language", "English")
     config["checkpoint_enabled"] = checkpoint
