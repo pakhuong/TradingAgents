@@ -2,6 +2,7 @@
 
 import os
 import unittest
+from urllib.parse import unquote
 
 import pytest
 
@@ -13,6 +14,12 @@ class TestSafeTickerComponent(unittest.TestCase):
     def test_accepts_common_ticker_formats(self):
         for ticker in ("AAPL", "BRK-B", "BRK.A", "0700.HK", "7203.T", "BHP.AX", "^GSPC"):
             self.assertEqual(safe_ticker_component(ticker), ticker)
+
+    def test_encodes_exchange_qualified_tickers_for_portable_paths(self):
+        encoded = safe_ticker_component("HOSE:GVR")
+
+        self.assertEqual(encoded, "HOSE%3AGVR")
+        self.assertEqual(unquote(encoded), "HOSE:GVR")
 
     def test_rejects_path_separators(self):
         for bad in (".", "..", "../etc", "a/b", "a\\b", "/abs", "..\\..\\x"):

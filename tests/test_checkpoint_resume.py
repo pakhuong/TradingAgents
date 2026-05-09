@@ -142,6 +142,16 @@ class TestCheckpointResume(unittest.TestCase):
         # Original date checkpoint still exists (untouched)
         self.assertTrue(has_checkpoint(self.tmpdir, self.ticker, self.date))
 
+    def test_exchange_qualified_ticker_uses_portable_checkpoint_filename(self):
+        ticker = "HOSE:GVR"
+
+        with get_checkpointer(self.tmpdir, ticker):
+            pass
+
+        checkpoint_dir = Path(self.tmpdir) / "checkpoints"
+        self.assertTrue((checkpoint_dir / "HOSE%3AGVR.db").exists())
+        self.assertFalse((checkpoint_dir / "HOSE:GVR.db").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

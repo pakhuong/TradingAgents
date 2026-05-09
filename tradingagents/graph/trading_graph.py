@@ -6,7 +6,7 @@ from pathlib import Path
 import json
 from io import StringIO
 from datetime import datetime, timedelta
-from typing import Dict, Any, Tuple, List, Optional
+from typing import Dict, Any, Tuple, List, Optional, Callable
 
 import pandas as pd
 
@@ -331,7 +331,13 @@ class TradingAgentsGraph:
         if updates:
             self.memory_log.batch_update_with_outcomes(updates)
 
-    def propagate(self, company_name, trade_date):
+    def propagate(
+        self,
+        company_name,
+        trade_date,
+        runtime_callbacks: Optional[List] = None,
+        chunk_handler: Optional[Callable[[Dict[str, Any]], None]] = None,
+    ):
         """Run the trading agents graph for a company on a specific date.
 
         When ``checkpoint_enabled`` is set in config, the graph is recompiled
@@ -363,36 +369,49 @@ class TradingAgentsGraph:
                 logger.info("Starting fresh for %s on %s", company_name, trade_date)
 
         try:
-            return self._run_graph(company_name, trade_date)
+            return self._run_graph(
+                company_name,
+                trade_date,
+                runtime_callbacks=runtime_callbacks,
+                chunk_handler=chunk_handler,
+            )
         finally:
             if self._checkpointer_ctx is not None:
                 self._checkpointer_ctx.__exit__(None, None, None)
                 self._checkpointer_ctx = None
                 self.graph = self.workflow.compile()
 
-    def _run_graph(self, company_name, trade_date):
+    def _run_graph(
+        self,
+        company_name,
+        trade_date,
+        runtime_callbacks: Optional[List] = None,
+        chunk_handler: Optional[Callable[[Dict[str, Any]], None]] = None,
+    ):
         """Execute the graph and write the resulting state to disk and memory log."""
         # Initialize state — inject memory log context for PM.
         past_context = self.memory_log.get_past_context(company_name)
         init_agent_state = self.propagator.create_initial_state(
             company_name, trade_date, past_context=past_context
         )
-        args = self.propagator.get_graph_args()
+        args = self.propagator.get_graph_args(callbacks=runtime_callbacks)
 
         # Inject thread_id so same ticker+date resumes, different date starts fresh.
         if self.config.get("checkpoint_enabled"):
             tid = thread_id(company_name, str(trade_date))
             args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = tid
 
-        if self.debug:
-            trace = []
+        if self.debug or chunk_handler is not None:
+            final_state = None
             for chunk in self.graph.stream(init_agent_state, **args):
-                if len(chunk["messages"]) == 0:
-                    pass
-                else:
+                final_state = chunk
+                if chunk_handler is not None:
+                    chunk_handler(chunk)
+                elif len(chunk["messages"]) != 0:
                     chunk["messages"][-1].pretty_print()
-                    trace.append(chunk)
-            final_state = trace[-1]
+
+            if final_state is None:
+                raise RuntimeError("Graph execution produced no state updates.")
         else:
             final_state = self.graph.invoke(init_agent_state, **args)
 

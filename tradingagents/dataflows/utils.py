@@ -4,13 +4,16 @@ import json
 import pandas as pd
 from datetime import date, timedelta, datetime
 from typing import Annotated
+from urllib.parse import quote
 
 SavePathType = Annotated[str, "File path to save data. If None, data is not saved."]
 
-# Tickers can contain letters, digits, dot, dash, underscore, and caret
-# (for index symbols like ^GSPC). Anything else is rejected so the value
-# never escapes a containing directory when interpolated into a path.
-_TICKER_PATH_RE = re.compile(r"^[A-Za-z0-9._\-\^]+$")
+# Tickers can contain letters, digits, dot, dash, underscore, caret,
+# and colon for exchange-qualified symbols like HOSE:GVR. The helper
+# percent-encodes characters that are valid ticker syntax but not portable
+# across filesystems so the ticker never escapes a containing directory.
+_TICKER_PATH_RE = re.compile(r"^[A-Za-z0-9._\-\^:]+$")
+_TICKER_PATH_SAFE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-^"
 
 
 def safe_ticker_component(value: str, *, max_len: int = 32) -> str:
@@ -22,7 +25,7 @@ def safe_ticker_component(value: str, *, max_len: int = 32) -> str:
     ``"../../../etc/foo"`` flows into ``os.path.join`` / ``Path /`` and
     escapes the configured cache, checkpoint, or results directory.
 
-    Returns ``value`` unchanged when it matches the allowed pattern; raises
+    Returns a portable path component derived from ``value``; raises
     ``ValueError`` otherwise.
     """
     if not isinstance(value, str) or not value:
@@ -38,7 +41,7 @@ def safe_ticker_component(value: str, *, max_len: int = 32) -> str:
     # value that's only dots.
     if set(value) == {"."}:
         raise ValueError(f"ticker cannot consist solely of dots: {value!r}")
-    return value
+    return quote(value, safe=_TICKER_PATH_SAFE_CHARS)
 
 
 def save_output(data: pd.DataFrame, tag: str, save_path: SavePathType = None) -> None:
