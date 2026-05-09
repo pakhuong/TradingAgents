@@ -881,3 +881,67 @@ class TestLegacyRemoval:
         assert len(entries) == 1
         assert entries[0]["ticker"] == "NVDA"
         assert entries[0]["pending"] is True
+
+    def test_run_graph_chunk_handler_preserves_memory_flow(self, tmp_path):
+        """Chunk-aware runs still inject memory context and store decisions."""
+        memory_log = make_log(tmp_path, filename="mem.md")
+        _resolve_entry(
+            memory_log,
+            "NVDA",
+            "2026-01-05",
+            DECISION_BUY,
+            "Prior decision was directionally correct.",
+        )
+        past_context = memory_log.get_past_context("NVDA")
+
+        fake_state = {
+            "final_trade_decision": "Rating: Buy\nBuy NVDA.",
+            "company_of_interest": "NVDA",
+            "trade_date": "2026-01-10",
+            "market_report": "",
+            "sentiment_report": "",
+            "news_report": "",
+            "fundamentals_report": "",
+            "investment_debate_state": {
+                "bull_history": "", "bear_history": "", "history": "",
+                "current_response": "", "judge_decision": "",
+            },
+            "investment_plan": "",
+            "trader_investment_plan": "",
+            "risk_debate_state": {
+                "aggressive_history": "", "conservative_history": "",
+                "neutral_history": "", "history": "", "judge_decision": "",
+                "current_aggressive_response": "", "current_conservative_response": "",
+                "current_neutral_response": "", "count": 1, "latest_speaker": "",
+            },
+        }
+
+        mock_graph = MagicMock()
+        mock_graph.memory_log = memory_log
+        mock_graph.log_states_dict = {}
+        mock_graph.debug = False
+        mock_graph.config = {"results_dir": str(tmp_path)}
+        mock_graph.graph.stream.return_value = iter([fake_state])
+        mock_graph.propagator.get_graph_args.return_value = {}
+        mock_graph.signal_processor.process_signal.return_value = "Buy"
+
+        seen_chunks = []
+        TradingAgentsGraph._run_graph(
+            mock_graph,
+            "NVDA",
+            "2026-01-10",
+            chunk_handler=seen_chunks.append,
+        )
+
+        mock_graph.propagator.create_initial_state.assert_called_once_with(
+            "NVDA",
+            "2026-01-10",
+            past_context=past_context,
+        )
+        mock_graph.graph.invoke.assert_not_called()
+        assert seen_chunks == [fake_state]
+
+        entries = memory_log.load_entries()
+        assert len(entries) == 2
+        assert entries[-1]["ticker"] == "NVDA"
+        assert entries[-1]["pending"] is True
