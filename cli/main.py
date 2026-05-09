@@ -29,11 +29,13 @@ from cli.utils import (
     ask_openrouter_reasoning_effort,
     ask_output_language,
     ask_qwen_region,
+    apply_market_profile_for_ticker,
     confirm_ollama_endpoint,
     detect_asset_type,
     ensure_api_key,
     get_openrouter_step7_prompt,
     get_ticker,
+    is_vnstock_available,
     prompt_openai_compatible_url,
     resolve_backend_url,
     select_analysts,
@@ -42,6 +44,7 @@ from cli.utils import (
     select_research_depth,
     select_shallow_thinking_agent,
 )
+from tradingagents.dataflows.utils import safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.graph.analyst_execution import (
     AnalystWallTimeTracker,
@@ -1045,7 +1048,8 @@ def run_analysis(checkpoint: bool | None = None):
     start_time = time.time()
 
     # Create result directory
-    results_dir = Path(config["results_dir"]) / selections["ticker"] / selections["analysis_date"]
+    safe_ticker = safe_ticker_component(selections["ticker"])
+    results_dir = Path(config["results_dir"]) / safe_ticker / selections["analysis_date"]
     results_dir.mkdir(parents=True, exist_ok=True)
     report_dir = results_dir / "reports"
     report_dir.mkdir(parents=True, exist_ok=True)
@@ -1124,26 +1128,7 @@ def run_analysis(checkpoint: bool | None = None):
         )
         update_display(layout, spinner_text, stats_handler=stats_handler, start_time=start_time)
 
-        # Initialize state and get graph args with callbacks.
-        # Resolve the instrument identity once here so all agents anchor to
-        # the real company (#814); the CLI builds state directly rather than
-        # going through propagate(), so this must happen on the CLI path too.
-        instrument_context = graph.resolve_instrument_context(
-            selections["ticker"], selections["asset_type"]
-        )
-        init_agent_state = graph.propagator.create_initial_state(
-            selections["ticker"],
-            selections["analysis_date"],
-            asset_type=selections["asset_type"],
-            instrument_context=instrument_context,
-        )
-        # Pass callbacks to graph config for tool execution tracking
-        # (LLM tracking is handled separately via LLM constructor)
-        args = graph.propagator.get_graph_args(callbacks=[stats_handler])
-
-        # Stream the analysis
-        trace = []
-        for chunk in graph.graph.stream(init_agent_state, **args):
+        def handle_chunk(chunk):
             # Process all messages in chunk, deduplicating by message ID
             for message in chunk.get("messages", []):
                 msg_id = getattr(message, "id", None)
@@ -1243,13 +1228,16 @@ def run_analysis(checkpoint: bool | None = None):
             # Update the display
             update_display(layout, stats_handler=stats_handler, start_time=start_time)
 
-            trace.append(chunk)
-
-        # Streamed chunks are per-node deltas, not full state. Merge them
-        # so every report field populated across the run is present.
-        final_state = {}
-        for chunk in trace:
-            final_state.update(chunk)
+        # Run the graph through the authoritative propagate path so checkpointing,
+        # memory-log writes, pending-entry resolution, and past-context injection
+        # all share the same execution surface as programmatic callers.
+        final_state, _decision = graph.propagate(
+            selections["ticker"],
+            selections["analysis_date"],
+            asset_type=selections["asset_type"],
+            runtime_callbacks=[stats_handler],
+            chunk_handler=handle_chunk,
+        )
 
         # Update all agent statuses to completed
         for agent in message_buffer.agent_status:

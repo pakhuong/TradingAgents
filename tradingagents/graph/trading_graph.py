@@ -5,6 +5,7 @@ import logging
 import os
 from io import StringIO
 from datetime import datetime, timedelta
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -388,7 +389,14 @@ class TradingAgentsGraph:
         identity = resolve_instrument_identity(ticker)
         return build_instrument_context(ticker, asset_type, identity)
 
-    def propagate(self, company_name, trade_date, asset_type: str = "stock"):
+    def propagate(
+        self,
+        company_name,
+        trade_date,
+        asset_type: str = "stock",
+        runtime_callbacks: list | None = None,
+        chunk_handler: Callable[[dict[str, Any]], None] | None = None,
+    ):
         """Run the trading agents graph for a company on a specific date.
 
         ``asset_type`` selects between the stock pipeline (default) and the
@@ -423,7 +431,13 @@ class TradingAgentsGraph:
                 logger.info("Starting fresh for %s on %s", company_name, trade_date)
 
         try:
-            return self._run_graph(company_name, trade_date, asset_type=asset_type)
+            return self._run_graph(
+                company_name,
+                trade_date,
+                asset_type=asset_type,
+                runtime_callbacks=runtime_callbacks,
+                chunk_handler=chunk_handler,
+            )
         finally:
             if self._checkpointer_ctx is not None:
                 self._checkpointer_ctx.__exit__(None, None, None)
@@ -445,7 +459,14 @@ class TradingAgentsGraph:
             )
         return write_report_tree(final_state, ticker, save_path)
 
-    def _run_graph(self, company_name, trade_date, asset_type: str = "stock"):
+    def _run_graph(
+        self,
+        company_name,
+        trade_date,
+        asset_type: str = "stock",
+        runtime_callbacks: list | None = None,
+        chunk_handler: Callable[[dict[str, Any]], None] | None = None,
+    ):
         """Execute the graph and write the resulting state to disk and memory log."""
         # Initialize state — inject memory log context for PM and the
         # deterministically resolved instrument identity for all agents.
@@ -458,18 +479,22 @@ class TradingAgentsGraph:
             past_context=past_context,
             instrument_context=instrument_context,
         )
-        args = self.propagator.get_graph_args()
+        args = self.propagator.get_graph_args(callbacks=runtime_callbacks)
 
         # Inject thread_id so same ticker+date resumes, different date starts fresh.
         if self.config.get("checkpoint_enabled"):
             tid = thread_id(company_name, str(trade_date))
             args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = tid
 
-        if self.debug:
-            trace = []
+        if self.debug or chunk_handler is not None:
+            final_state = {}
             last_printed = None
+            produced_chunks = False
             for chunk in self.graph.stream(init_agent_state, **args):
-                if chunk["messages"]:
+                produced_chunks = True
+                if chunk_handler is not None:
+                    chunk_handler(chunk)
+                elif chunk.get("messages"):
                     msg = chunk["messages"][-1]
                     # Nodes after the trader don't append to messages, so the
                     # same trailing message repeats across chunks. Print it only
@@ -478,12 +503,10 @@ class TradingAgentsGraph:
                     if signature != last_printed:
                         msg.pretty_print()
                         last_printed = signature
-                    trace.append(chunk)
-            # Streamed chunks are per-node deltas. Merge them so the returned
-            # state matches what graph.invoke() yields in the non-debug path.
-            final_state = {}
-            for chunk in trace:
                 final_state.update(chunk)
+
+            if not produced_chunks:
+                raise RuntimeError("Graph execution produced no state updates.")
         else:
             final_state = self.graph.invoke(init_agent_state, **args)
 
