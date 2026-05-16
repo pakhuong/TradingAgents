@@ -8,6 +8,7 @@ from cli.utils import (
     normalize_ticker_symbol,
 )
 from tradingagents.agents.utils.agent_utils import build_instrument_context
+from tradingagents.default_config import normalize_vietnam_provider_symbol
 
 
 @pytest.mark.unit
@@ -35,6 +36,18 @@ class TickerSymbolHandlingTests(unittest.TestCase):
         self.assertFalse(is_explicit_vietnam_symbol("AAPL"))
         self.assertFalse(is_explicit_vietnam_symbol("7203.T"))
         self.assertFalse(is_explicit_vietnam_symbol("BRK.B"))
+
+    def test_normalize_vietnam_provider_symbol(self):
+        self.assertEqual(normalize_vietnam_provider_symbol("HOSE:GVR"), "GVR")
+        self.assertEqual(normalize_vietnam_provider_symbol("HSX:GVR"), "GVR")
+        self.assertEqual(normalize_vietnam_provider_symbol("HNX:SHS"), "SHS")
+        self.assertEqual(normalize_vietnam_provider_symbol("UPCOM:ABC"), "ABC")
+        self.assertEqual(normalize_vietnam_provider_symbol("GVR.HM"), "GVR")
+        self.assertEqual(normalize_vietnam_provider_symbol("SHS.HN"), "SHS")
+        self.assertEqual(normalize_vietnam_provider_symbol("ABC.UPCOM"), "ABC")
+        self.assertEqual(normalize_vietnam_provider_symbol("VNINDEX"), "VNINDEX")
+        self.assertEqual(normalize_vietnam_provider_symbol("VN30"), "VN30")
+        self.assertEqual(normalize_vietnam_provider_symbol("BRK.B"), "BRK.B")
 
     def test_apply_market_profile_for_explicit_vietnam_symbol(self):
         config = {"data_vendors": {"core_stock_apis": "yfinance"}}
