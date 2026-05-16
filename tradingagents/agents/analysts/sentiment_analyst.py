@@ -5,13 +5,17 @@ the old version had a prompt that demanded social-media analysis but the
 only tool available was Yahoo Finance news — which led LLMs to fabricate
 Reddit/X/StockTwits content under prompt pressure (verified live).
 
-The redesigned agent pre-fetches three complementary data sources before
-the LLM is invoked and injects them into the prompt as structured blocks:
+The redesigned agent pre-fetches complementary data sources before the LLM
+is invoked and injects them into the prompt as structured blocks. Default
+symbols use the US-oriented source set:
 
   1. News headlines     — Yahoo Finance (institutional framing)
   2. StockTwits messages — retail-trader posts indexed by cashtag, with
                            user-labeled Bullish/Bearish sentiment tags
   3. Reddit posts        — r/wallstreetbets, r/stocks, r/investing
+
+Explicit Vietnam symbols use routed company news plus Vietnam-local news
+and optional public forum context instead of US social endpoints.
 
 The agent does not use tool-calling; the data is in the prompt from
 turn 0. Output uses the structured-output pattern (json_schema for
@@ -41,6 +45,8 @@ from tradingagents.agents.utils.structured import (
 )
 from tradingagents.dataflows.reddit import fetch_reddit_posts
 from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
+from tradingagents.dataflows.vietnam_sentiment import fetch_vietnam_sentiment_sources
+from tradingagents.default_config import is_explicit_vietnam_symbol
 
 
 def _seven_days_back(trade_date: str) -> str:
@@ -50,10 +56,10 @@ def _seven_days_back(trade_date: str) -> str:
 def create_sentiment_analyst(llm):
     """Create a sentiment analyst node for the trading graph.
 
-    Pre-fetches news + StockTwits + Reddit data, injects them into the
-    prompt as structured blocks, and produces a deterministic sentiment
-    report via structured output (with a free-text fallback for providers
-    that do not support it).
+    Pre-fetches routed sentiment inputs, injects them into the prompt as
+    structured blocks, and produces a deterministic sentiment report via
+    structured output (with a free-text fallback for providers that do not
+    support it).
     """
     structured_llm = bind_structured(llm, SentimentReport, "Sentiment Analyst")
 
@@ -63,21 +69,34 @@ def create_sentiment_analyst(llm):
         start_date = _seven_days_back(end_date)
         instrument_context = get_instrument_context_from_state(state)
 
-        # Pre-fetch all three sources. Each fetcher degrades gracefully and
-        # returns a string (no exceptions surface from here), so the LLM
-        # always sees something — either real data or a clear placeholder.
+        # Each fetcher degrades gracefully and returns a string, so the LLM
+        # always sees something: real data or a clear placeholder.
         news_block = get_news.func(ticker, start_date, end_date)
-        stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
-        reddit_block = fetch_reddit_posts(ticker)
+        if is_explicit_vietnam_symbol(ticker):
+            vietnam_sources_block = fetch_vietnam_sentiment_sources(
+                ticker=ticker,
+                start_date=start_date,
+                end_date=end_date,
+                issuer_news_block=news_block,
+            )
+            system_message = _build_vietnam_system_message(
+                ticker=ticker,
+                start_date=start_date,
+                end_date=end_date,
+                vietnam_sources_block=vietnam_sources_block,
+            )
+        else:
+            stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
+            reddit_block = fetch_reddit_posts(ticker)
 
-        system_message = _build_system_message(
-            ticker=ticker,
-            start_date=start_date,
-            end_date=end_date,
-            news_block=news_block,
-            stocktwits_block=stocktwits_block,
-            reddit_block=reddit_block,
-        )
+            system_message = _build_system_message(
+                ticker=ticker,
+                start_date=start_date,
+                end_date=end_date,
+                news_block=news_block,
+                stocktwits_block=stocktwits_block,
+                reddit_block=reddit_block,
+            )
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -179,6 +198,64 @@ Fill the following fields:
 - **overall_score**: A number from 0 (maximally bearish) to 10 (maximally bullish); 5 is neutral. Keep it consistent with overall_band.
 - **confidence**: low / medium / high, based on data quality and sample size.
 - **narrative**: Full source-by-source breakdown, divergences, dominant narrative themes, catalysts and risks, and a markdown summary table of key sentiment signals (direction, source, supporting evidence).
+
+{get_language_instruction()}"""
+
+
+def _build_vietnam_system_message(
+    *,
+    ticker: str,
+    start_date: str,
+    end_date: str,
+    vietnam_sources_block: str,
+) -> str:
+    """Assemble the Vietnam-aware sentiment system message."""
+    return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on Vietnam-specific news and sentiment sources that have already been collected for you.
+
+## Data sources (pre-fetched, in this prompt)
+
+### News headlines and company disclosures
+Issuer-scoped company news and disclosures from the configured company-news vendor are included inside the Vietnam source block.
+
+### Vietnam local market news
+Local public financial news sources are included where available. Treat formal news, disclosures, and company-specific headlines as higher-confidence evidence than informal discussion.
+
+### Vietnam investor forum discussion
+Forum-style investor discussion is optional, noisy, and lower confidence. Use it only as a retail-attention or narrative signal when present.
+
+<start_of_vietnam_sources>
+{vietnam_sources_block}
+<end_of_vietnam_sources>
+
+## Data limits
+
+Vietnam market social data is less standardized than large US retail-social feeds. Some public pages may return unavailable placeholders, no matching items, guarded-page responses, or sparse ticker mentions. Treat those gaps as data-quality limits, not as evidence of neutral sentiment.
+
+## How to analyze this data (best practices)
+
+1. **Prioritize formal issuer-scoped news and disclosures.** Company events, regulatory filings, financial updates, and exchange-relevant headlines should carry more weight than informal discussion.
+
+2. **Use local financial news for narrative context.** Identify market-wide, sector, liquidity, foreign-flow, policy, or macro stories that may shape sentiment around {ticker}.
+
+3. **Treat forum discussion as noisy.** If public forum items are present, use them to identify recurring retail narratives, crowd attention, and possible rumor risk, but avoid treating them as verified facts.
+
+4. **Look for alignment and divergence.** Compare issuer news, local market news, and any forum discussion. A bullish retail narrative against weak formal news, or negative local headlines against strong company disclosures, is itself useful context.
+
+5. **Be explicit about source quality.** If sources return placeholders, sparse items, or no matches, flag the confidence impact in the report.
+
+6. **Identify catalysts and risks** that emerge across sources: earnings, dividends, governance changes, sector policy, macro conditions, liquidity, foreign flows, or market-wide volatility.
+
+7. **Past sentiment is not predictive.** Frame your conclusions as signal for the trader to weigh alongside fundamentals and technicals, not as a price call.
+
+## Output
+
+Produce a sentiment report covering, in order:
+
+1. **Overall sentiment direction** — Bullish / Bearish / Neutral / Mixed — with a brief confidence note based on data quality and sample size.
+2. **Source-by-source breakdown** — what company news, Vietnam local market news, and any forum discussion are telling you, with specific evidence.
+3. **Divergences, alignments, and key narratives** across sources.
+4. **Catalysts and risks** surfaced by the data.
+5. **Markdown table** at the end summarizing key sentiment signals, their direction, source, and supporting evidence.
 
 {get_language_instruction()}"""
 

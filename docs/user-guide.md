@@ -314,6 +314,8 @@ Then run the CLI and enter a supported symbol such as:
 
 Explicit Vietnam symbols automatically switch to the Vietnam profile, which uses `VNINDEX` as the benchmark and `VND` as the currency.
 
+For sentiment analysis, explicit Vietnam symbols also use Vietnam-aware source routing. The Sentiment Analyst keeps issuer-scoped company news from the configured news vendor, adds public Vietnam-local financial news where available, and intentionally skips StockTwits plus the default US Reddit subreddits.
+
 Optional sponsor modules extend the adapter without changing your TradingAgents config:
 
 - `vnstock_data` is preferred for quote/history, financial statements, issuer-scoped company news, and insider transactions.
@@ -400,6 +402,10 @@ uv sync --extra vietnam
 ```
 
 Without `vnstock`, explicit Vietnam symbols can fail or return empty data through generic vendors.
+
+### Vietnam sentiment sources show unavailable
+
+The Sentiment Analyst uses public Vietnam-local pages and RSS feeds for explicit Vietnam symbols. Individual sources can return guarded pages, HTTP errors, invalid RSS, or no ticker matches; TradingAgents reports those as placeholders and continues the run. These placeholders mean a source was unavailable or sparse, not that graph execution failed.
 
 ### Vietnam global news still says unavailable
 

@@ -18,6 +18,9 @@ Breaking changes within the 0.x line are called out explicitly.
   `vnstock_news`) are now detected lazily so Vietnam quote/company/finance
   calls, technical indicators, and macro news can use richer provider APIs
   when installed without changing the default dependency set.
+- Vietnam-aware sentiment source routing now uses local public news and
+  optional forum context for explicit Vietnam symbols instead of StockTwits
+  and default US Reddit searches.
 
 ## [0.3.0] — 2026-06-22
 

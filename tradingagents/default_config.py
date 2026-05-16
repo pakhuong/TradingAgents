@@ -55,6 +55,23 @@ def normalize_ticker_symbol(ticker: str) -> str:
     return str(ticker).strip().upper()
 
 
+def normalize_vietnam_provider_symbol(ticker: str) -> str:
+    """Map explicit Vietnam ticker forms to provider-local symbols."""
+    normalized = normalize_ticker_symbol(ticker)
+
+    if ":" in normalized:
+        prefix, remainder = normalized.split(":", 1)
+        if prefix in VIETNAM_EXCHANGE_PREFIXES:
+            normalized = remainder
+
+    for suffix in VIETNAM_SUFFIXES:
+        if normalized.endswith(suffix):
+            normalized = normalized[: -len(suffix)]
+            break
+
+    return normalized
+
+
 def is_explicit_vietnam_symbol(ticker: str) -> bool:
     """Return True for ticker forms that unambiguously require Vietnam data."""
     normalized = normalize_ticker_symbol(ticker)

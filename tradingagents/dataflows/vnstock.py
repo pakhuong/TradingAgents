@@ -8,12 +8,12 @@ import pandas as pd
 from dateutil.relativedelta import relativedelta
 from stockstats import wrap
 
+from tradingagents.default_config import normalize_vietnam_provider_symbol
+
 from .errors import DataVendorUnavailableError
 
 
 OHLCV_COLUMNS = ["Date", "Open", "High", "Low", "Close", "Volume"]
-VIETNAM_EXCHANGE_PREFIXES = {"HOSE", "HSX", "HNX", "UPCOM"}
-VIETNAM_SUFFIXES = (".HM", ".HN", ".UPCOM")
 _VNSTOCK_AUTH_INITIALIZED = False
 
 INDICATOR_DESCRIPTIONS = {
@@ -469,18 +469,7 @@ def _initialize_vnstock_auth(vnstock_module) -> None:
 
 def _normalize_vietnam_symbol(symbol: str) -> str:
     """Map Vietnam exchange-qualified variants to vnstock local symbols."""
-    normalized = str(symbol).strip().upper()
-    if ":" in normalized:
-        prefix, remainder = normalized.split(":", 1)
-        if prefix in VIETNAM_EXCHANGE_PREFIXES:
-            normalized = remainder
-
-    for suffix in VIETNAM_SUFFIXES:
-        if normalized.endswith(suffix):
-            normalized = normalized[: -len(suffix)]
-            break
-
-    return normalized
+    return normalize_vietnam_provider_symbol(symbol)
 
 
 def _optional_import(module_name: str):
