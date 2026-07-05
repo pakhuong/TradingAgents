@@ -5,8 +5,6 @@ the news path: a broker symbol like XAUUSD must resolve to the same Yahoo symbol
 (GC=F) that the price path uses, so identity, realized-return, and news lookups
 hit the right instrument instead of failing/mismatching.
 """
-import pandas as pd
-
 import tradingagents.agents.utils.agent_utils as au
 import tradingagents.dataflows.yfinance_news as ynews
 import tradingagents.graph.trading_graph as tg
@@ -36,22 +34,34 @@ def test_identity_lookup_normalizes_symbol(monkeypatch):
 def test_fetch_returns_normalizes_symbol(monkeypatch):
     queried = []
 
-    class FakeTicker:
-        def __init__(self, symbol):
-            queried.append(symbol)
+    def fake_route(tool_name, symbol, start_date, end_date):
+        queried.append((tool_name, symbol, start_date, end_date))
+        return "\n".join(
+            [
+                "Date,Close",
+                "2025-01-02,100.0",
+                "2025-01-03,101.0",
+                "2025-01-04,102.0",
+                "2025-01-05,103.0",
+                "2025-01-06,104.0",
+                "2025-01-07,105.0",
+                "2025-01-08,106.0",
+            ]
+        )
 
-        def history(self, *args, **kwargs):
-            return pd.DataFrame({"Close": [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0]})
+    monkeypatch.setattr(tg, "route_to_vendor", fake_route)
 
-    monkeypatch.setattr(tg.yf, "Ticker", FakeTicker)
-
-    # _fetch_returns does not use ``self``; call unbound to avoid building the graph.
+    # Build a minimal instance to avoid full graph construction while still
+    # exercising the real _fetch_close_prices vendor boundary.
+    graph = TradingAgentsGraph.__new__(TradingAgentsGraph)
+    graph.config = {}
     raw, alpha, days = TradingAgentsGraph._fetch_returns(
-        None, "XAUUSD", "2025-01-02", holding_days=5, benchmark="SPY"
+        graph, "XAUUSD", "2025-01-02", holding_days=5, benchmark="SPY"
     )
 
-    assert queried[0] == "GC=F"  # stock symbol normalized (#984)
-    assert queried[1] == "SPY"   # benchmark left as the canonical symbol
+    assert queried[0][0] == "get_stock_data"
+    assert queried[0][1] == "GC=F"  # stock symbol normalized (#984)
+    assert queried[1][1] == "SPY"   # benchmark left as the canonical symbol
     assert raw is not None and days is not None
 
 

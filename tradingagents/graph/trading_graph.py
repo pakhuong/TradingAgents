@@ -32,6 +32,7 @@ from tradingagents.agents.utils.agent_utils import (
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.dataflows.config import set_config
 from tradingagents.dataflows.interface import route_to_vendor
+from tradingagents.dataflows.symbol_utils import normalize_symbol
 from tradingagents.dataflows.utils import safe_ticker_component
 from tradingagents.default_config import (
     DEFAULT_CONFIG,
@@ -306,7 +307,9 @@ class TradingAgentsGraph:
 
     def _fetch_close_prices(self, symbol: str, start_date: str, end_date: str) -> pd.Series:
         """Fetch close prices through the configured vendor router."""
-        report = route_to_vendor("get_stock_data", symbol, start_date, end_date)
+        report = route_to_vendor(
+            "get_stock_data", normalize_symbol(symbol), start_date, end_date
+        )
         return self._extract_close_prices(report)
 
     @staticmethod
